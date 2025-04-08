@@ -1,35 +1,95 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Insecure Chat</title>
 
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="style.css" />
+    <link
+      rel="stylesheet"
+      href="../node_modules/bootstrap/dist/css/bootstrap.min.css"
+    />
 
     <script type="text/javascript">
-        let ipcRenderer = require('electron').ipcRenderer;
-
-        function login() {
-            const userName = document.getElementById("inputUserName").value;
-
-            ipcRenderer.send('login', { name: userName });
-        }
+      let ipcRenderer = require("electron").ipcRenderer;
+      function toggleAuth(mode) {
+        document.getElementById("login-section").style.display =
+          mode === "login" ? "block" : "none";
+        document.getElementById("signup-section").style.display =
+          mode === "signup" ? "block" : "none";
+      }
+      function login() {
+        const userName = document.getElementById("loginUserName").value;
+        const password = document.getElementById("loginPassword").value;
+        ipcRenderer.send("login", { name: userName, password: password });
+      }
+      function signup() {
+        const userName = document.getElementById("signupUserName").value;
+        const password = document.getElementById("signupPassword").value;
+        ipcRenderer.send("register", { name: userName, password: password });
+      }
+      // Listen for success from main process
+      ipcRenderer.on("registration-success", () => {
+        toggleAuth("login");
+        alert("Registration successful! Please log in.");
+      });
     </script>
-</head>
+  </head>
 
-
-<body>
-    <br><br><br><br>
-    <div style="width:400px; margin:0 auto;">
+  <body>
+    <br /><br /><br /><br />
+    <div id="auth-container" style="width: 400px; margin: 0 auto">
+      <!-- Login Section -->
+      <div id="login-section">
+        <h3>Login</h3>
         <div class="form-group">
-            <label for="inputUserName" style="font-weight: bold; margin-bottom: 0.5em;">Username</label>
-            <input type="string" class="form-control" name="username" id="inputUserName" placeholder="Enter name" autofocus>
+          <label for="loginUserName">Username</label>
+          <input
+            type="text"
+            class="form-control"
+            id="loginUserName"
+            placeholder="Enter username"
+          />
+          <input
+            type="password"
+            class="form-control"
+            id="loginPassword"
+            placeholder="Enter password"
+          />
         </div>
-        
-        <button type="submit" class="btn btn-primary" style="margin-top: 1em;" onclick="login()" >Login</button>
-    </div>
-</body>
+        <button class="btn btn-primary" onclick="login()">Login</button>
+        <p>
+          Don't have an account?
+          <a href="#" onclick="toggleAuth('signup')">Sign up</a>
+        </p>
+      </div>
 
+      <!-- Sign-Up Section (hidden by default) -->
+      <div id="signup-section" style="display: none">
+        <h3>Sign Up</h3>
+        <div class="form-group">
+          <label for="signupUserName">Choose a Username</label>
+          <input
+            type="text"
+            class="form-control"
+            id="signupUserName"
+            placeholder="Choose a username"
+          />
+          <input
+            type="password"
+            class="form-control"
+            id="signupPassword"
+            placeholder="Choose a password"
+          />
+        </div>
+        <button class="btn btn-success" onclick="signup()">
+          Create Account
+        </button>
+        <p>
+          Already have an account?
+          <a href="#" onclick="toggleAuth('login')">Log in</a>
+        </p>
+      </div>
+    </div>
+  </body>
 </html>

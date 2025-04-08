@@ -54,6 +54,22 @@ ipcMain.on("login", function (event, data) {
   }
 });
 
+ipcMain.on("register", function (event, data) {
+  // Sanitizing user input on login
+  const cleanName = sanitizeHtml(data.name);
+  // Ensure only characters & digits are used
+  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
+  console.log("User login name (post clean): ", cleanName);
+
+  const pwd = data.password;
+  // Ensure a maximum size and minimum size for names
+  if (cleanName.length > 5 && cleanName.length < 15 && isValidUsername) {
+    console.log("Tests succeeded");
+    userData.name = cleanName;
+    event.reply("registration-success");
+  }
+});
+
 ipcMain.on("get-user-data", function (event, arg) {
   event.sender.send("user-data", userData);
   console.log("I am printing this", userData);

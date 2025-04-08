@@ -1,34 +1,42 @@
 // Setup basic express server
-const express = require('express');
-const app     = express();
-const path    = require('path');
-const server  = require('http').createServer(app);
-const io      = require('socket.io')(server);
-const port    = process.env.PORT || 3000;
+const express = require("express");
+const app = express();
+const path = require("path");
+const port = process.env.PORT || 3000;
+const fs = require("fs");
+const https = require("https");
 
-const Rooms   = require('./rooms.js');
-const Users   = require('./users.js');
+const Rooms = require("./rooms.js");
+const Users = require("./users.js");
+
+// Read certs
+const options = {
+  key: fs.readFileSync(path.join(__dirname, "certs", "localhost-key.pem")),
+  cert: fs.readFileSync(path.join(__dirname, "certs", "localhost.pem")),
+};
 
 // Load application config/state
-require('./basicstate.js').setup(Users,Rooms);
+require("./basicstate.js").setup(Users, Rooms);
 
-server.listen(port, () => {
-  console.log('Server listening on port %d', port);
+const server = https.createServer(options, app).listen(port, () => {
+  console.log(`HTTPS server running at https://localhost:${port}`);
 });
+
+const io = require("socket.io")(server);
 
 ///////////////////////////////
 // Chatroom helper functions //
 ///////////////////////////////
 
 function sendToRoom(room, event, data) {
-  io.to('room' + room.getId()).emit(event, data);
+  io.to("room" + room.getId()).emit(event, data);
 }
 
 function newUser(name) {
   const user = Users.addUser(name);
   const rooms = Rooms.getForcedRooms();
 
-  rooms.forEach(room => {
+  rooms.forEach((room) => {
     addUserToRoom(user, room);
   });
 
@@ -44,7 +52,7 @@ function newRoom(name, user, options) {
 function newChannel(name, description, private, user) {
   return newRoom(name, user, {
     description: description,
-    private: private
+    private: private,
   });
 }
 
@@ -61,27 +69,26 @@ function newDirectRoom(user_a, user_b) {
 }
 
 function getDirectRoom(user_a, user_b) {
-  const rooms = Rooms.getRooms().filter(r => r.direct 
-    && (
-      (r.members[0] == user_a.name && r.members[1] == user_b.name) ||
-      (r.members[1] == user_a.name && r.members[0] == user_b.name)
-    ));
+  const rooms = Rooms.getRooms().filter(
+    (r) =>
+      r.direct &&
+      ((r.members[0] == user_a.name && r.members[1] == user_b.name) ||
+        (r.members[1] == user_a.name && r.members[0] == user_b.name))
+  );
 
-  if (rooms.length == 1)
-    return rooms[0];
-  else
-    return newDirectRoom(user_a, user_b);
+  if (rooms.length == 1) return rooms[0];
+  else return newDirectRoom(user_a, user_b);
 }
 
 function addUserToRoom(user, room) {
   user.addSubscription(room);
   room.addMember(user);
 
-  sendToRoom(room, 'update_user', {
+  sendToRoom(room, "update_user", {
     room: room.getId(),
     username: user,
-    action: 'added',
-    members: room.getMembers()
+    action: "added",
+    members: room.getMembers(),
   });
 }
 
@@ -89,11 +96,11 @@ function removeUserFromRoom(user, room) {
   user.removeSubscription(room);
   room.removeMember(user);
 
-  sendToRoom(room, 'update_user', {
+  sendToRoom(room, "update_user", {
     room: room.getId(),
     username: user,
-    action: 'removed',
-    members: room.getMembers()
+    action: "removed",
+    members: room.getMembers(),
   });
 }
 
@@ -103,12 +110,12 @@ function addMessageToRoom(roomId, username, msg) {
   msg.time = new Date().getTime();
 
   if (room) {
-    sendToRoom(room, 'new message', {
+    sendToRoom(room, "new message", {
       username: username,
       message: msg.message,
       room: msg.room,
       time: msg.time,
-      direct: room.direct
+      direct: room.direct,
     });
 
     room.addMessage(msg);
@@ -118,12 +125,11 @@ function addMessageToRoom(roomId, username, msg) {
 function setUserActiveState(socket, username, state) {
   const user = Users.getUser(username);
 
-  if (user)
-    user.setActiveState(state);
-  
-  socket.broadcast.emit('user_state_change', {
+  if (user) user.setActiveState(state);
+
+  socket.broadcast.emit("user_state_change", {
     username: username,
-    active: state
+    active: state,
   });
 }
 
@@ -133,17 +139,17 @@ function setUserActiveState(socket, username, state) {
 
 const socketmap = {};
 
-io.on('connection', (socket) => {
+io.on("connection", (socket) => {
   let userLoggedIn = false;
   let username = false;
-  
+
   console.log("New Connection");
 
   ///////////////////////
   // incomming message //
   ///////////////////////
 
-  socket.on('new message', (msg) => {
+  socket.on("new message", (msg) => {
     if (userLoggedIn) {
       console.log(msg);
       addMessageToRoom(msg.room, username, msg);
@@ -154,103 +160,102 @@ io.on('connection', (socket) => {
   // request for direct room //
   /////////////////////////////
 
-
-  socket.on('request_direct_room', req => {
+  socket.on("request_direct_room", (req) => {
     if (userLoggedIn) {
       const user_a = Users.getUser(req.to);
       const user_b = Users.getUser(username);
 
-      if(user_a && user_b) {
+      if (user_a && user_b) {
         const room = getDirectRoom(user_a, user_b);
-        const roomCID = 'room' + room.getId();
+        const roomCID = "room" + room.getId();
         socket.join(roomCID);
-        if (socketmap[user_a.name])
-         socketmap[user_a.name].join(roomCID);
+        if (socketmap[user_a.name]) socketmap[user_a.name].join(roomCID);
 
-        socket.emit('update_room', {
+        socket.emit("update_room", {
           room: room,
-          moveto: true
+          moveto: true,
         });
       }
     }
   });
 
-  socket.on('add_channel', req => {
+  socket.on("add_channel", (req) => {
     if (userLoggedIn) {
       const user = Users.getUser(username);
       console.log(req);
       const room = newChannel(req.name, req.description, req.private, user);
-      const roomCID = 'room' + room.getId();
+      const roomCID = "room" + room.getId();
       socket.join(roomCID);
 
-      socket.emit('update_room', {
+      socket.emit("update_room", {
         room: room,
-        moveto: true
+        moveto: true,
       });
 
       if (!room.private) {
-        const publicChannels = Rooms.getRooms().filter(r => !r.direct && !r.private);
-        socket.broadcast.emit('update_public_channels', {
-          publicChannels: publicChannels
+        const publicChannels = Rooms.getRooms().filter(
+          (r) => !r.direct && !r.private
+        );
+        socket.broadcast.emit("update_public_channels", {
+          publicChannels: publicChannels,
         });
       }
     }
   });
 
-  socket.on('join_channel', req => {
+  socket.on("join_channel", (req) => {
     if (userLoggedIn) {
       const user = Users.getUser(username);
-      const room = Rooms.getRoom(req.id)
+      const room = Rooms.getRoom(req.id);
 
-      if(!room.direct && !room.private) {
+      if (!room.direct && !room.private) {
         addUserToRoom(user, room);
-        
-        const roomCID = 'room' + room.getId();
+
+        const roomCID = "room" + room.getId();
         socket.join(roomCID);
 
-        socket.emit('update_room', {
+        socket.emit("update_room", {
           room: room,
-          moveto: true
+          moveto: true,
         });
       }
     }
   });
 
-  
-  socket.on('add_user_to_channel', req => {
+  socket.on("add_user_to_channel", (req) => {
     if (userLoggedIn) {
       const user = Users.getUser(req.user);
-      const room = Rooms.getRoom(req.channel)
+      const room = Rooms.getRoom(req.channel);
 
-      if(!room.direct) {
+      if (!room.direct) {
         addUserToRoom(user, room);
-        
+
         if (socketmap[user.name]) {
-          const roomCID = 'room' + room.getId();
+          const roomCID = "room" + room.getId();
           socketmap[user.name].join(roomCID);
 
-          socketmap[user.name].emit('update_room', {
+          socketmap[user.name].emit("update_room", {
             room: room,
-            moveto: false
+            moveto: false,
           });
         }
       }
     }
   });
 
-  socket.on('leave_channel', req => {
+  socket.on("leave_channel", (req) => {
     if (userLoggedIn) {
       const user = Users.getUser(username);
-      const room = Rooms.getRoom(req.id)
+      const room = Rooms.getRoom(req.id);
 
-      if(!room.direct && !room.forceMembership) {
+      if (!room.direct && !room.forceMembership) {
         removeUserFromRoom(user, room);
-        
-        const roomCID = 'room' + room.getId();
+
+        const roomCID = "room" + room.getId();
         socket.leave(roomCID);
 
-        socket.emit('remove_room', {
-          room: room.getId()
+        socket.emit("remove_room", {
+          room: room.getId(),
         });
       }
     }
@@ -260,49 +265,49 @@ io.on('connection', (socket) => {
   // user join //
   ///////////////
 
-  socket.on('join', (p_username) => {
-    if (userLoggedIn) 
-      return;
+  socket.on("join", (p_username) => {
+    if (userLoggedIn) return;
 
     username = p_username;
     userLoggedIn = true;
     socketmap[username] = socket;
 
     const user = Users.getUser(username) || newUser(username);
-    
-    const rooms = user.getSubscriptions().map(s => {
-      socket.join('room' + s);
+
+    const rooms = user.getSubscriptions().map((s) => {
+      socket.join("room" + s);
       return Rooms.getRoom(s);
     });
 
-    const publicChannels = Rooms.getRooms().filter(r => !r.direct && !r.private);
+    const publicChannels = Rooms.getRooms().filter(
+      (r) => !r.direct && !r.private
+    );
 
-    socket.emit('login', {
-      users: Users.getUsers().map(u => ({username: u.name, active: u.active})),
-      rooms : rooms,
-      publicChannels: publicChannels
+    socket.emit("login", {
+      users: Users.getUsers().map((u) => ({
+        username: u.name,
+        active: u.active,
+      })),
+      rooms: rooms,
+      publicChannels: publicChannels,
     });
 
     setUserActiveState(socket, username, true);
   });
 
-
   ////////////////
   // reconnects //
   ////////////////
 
-  socket.on('reconnect', () => {
-    if (userLoggedIn)
-      setUserActiveState(socket, username, true);
+  socket.on("reconnect", () => {
+    if (userLoggedIn) setUserActiveState(socket, username, true);
   });
 
   /////////////////
   // disconnects //
   /////////////////
 
-  socket.on('disconnect', () => {
-    if (userLoggedIn)
-      setUserActiveState(socket, username, false);
+  socket.on("disconnect", () => {
+    if (userLoggedIn) setUserActiveState(socket, username, false);
   });
-
 });
