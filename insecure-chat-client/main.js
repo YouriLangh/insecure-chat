@@ -48,15 +48,45 @@ ipcMain.on("login", function (event, data) {
   const dirtyTest = "<>alert('xss')"; // Is sanitized to :  &lt;&gt;alert('xss')
 
   // Sanitizing user input on login
-  const clean = sanitizeHtml(data.name);
+  const cleanName = sanitizeHtml(data.name);
   // Ensure only characters & digits are used
-  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(clean);
-  console.log("User login name (post clean): ", clean);
+  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
+  const pwd = data.password;
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(pwd);
+  console.log("User login name (post clean): ", cleanName);
 
   // Ensure a maximum size and minimum size for names
-  if (clean.length > 5 && clean.length < 15 && isValidUsername) {
-    userData.name = clean;
-    openChat(BrowserWindow.getAllWindows()[0], data);
+  if (
+    cleanName.length > 5 &&
+    cleanName.length < 15 &&
+    isValidUsername &&
+    isValidPwd
+  ) {
+    fetch("https://localhost:3000/login", {
+      method: "POST",
+      agent,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: cleanName,
+        password: pwd,
+      }),
+    })
+      .then((res) => res.text())
+      .then((data) => {
+        console.log("Server response:", data);
+        userData.name = cleanName;
+        openChat(BrowserWindow.getAllWindows()[0], data);
+        event.reply("registration-success");
+      })
+      .catch((err) => {
+        console.error("HTTPS request failed:", err);
+        event.reply("registration-failed");
+      });
+  } else {
+    console.log("Invalid username or password");
+    event.reply("registration-failed");
   }
 });
 
@@ -65,7 +95,7 @@ ipcMain.on("register", function (event, data) {
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   const pwd = data.password;
 
-  console.log("User login name (post clean): ", cleanName);
+  console.log("User register name (post clean): ", cleanName);
 
   if (
     cleanName.length > 5 &&

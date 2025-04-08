@@ -81,7 +81,7 @@ app.post("/register", async (req, res) => {
       return res.status(400).send("User already exists");
     }
 
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert the new user into the database
     const query = `
@@ -99,6 +99,39 @@ app.post("/register", async (req, res) => {
   } catch (error) {
     console.error("Registration failed:", error);
     res.status(500).send("Registration error");
+  }
+});
+
+app.post("/login", async (req, res) => {
+  const { name, password } = req.body;
+
+  if (!name || !password) {
+    return res.status(400).send("Missing credentials");
+  }
+
+  try {
+    // Check if the user exists
+    const findUserQuery = `
+      SELECT password FROM users WHERE name = $1
+    `;
+    const findUserResult = await pool.query(findUserQuery, [name]);
+
+    if (findUserResult.rows.length === 0) {
+      return res.status(400).send("No user exists by that username");
+    }
+
+    const hashedUserPwd = findUserResult.rows[0].password;
+    const samePwd = await bcrypt.compare(password, hashedUserPwd);
+
+    if (!samePwd) {
+      return res.status(400).send("Incorrect password");
+    }
+
+    // User is authenticated successfully
+    res.send("Login successful");
+  } catch (error) {
+    console.error("Login failed:", error);
+    res.status(500).send("Login error");
   }
 });
 
