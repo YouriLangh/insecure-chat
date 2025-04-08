@@ -81,18 +81,16 @@ app.post("/register", async (req, res) => {
       return res.status(400).send("User already exists");
     }
 
-    // Generate a salt and hash the password using it
-    const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Insert the new user into the database
     const query = `
-      INSERT INTO users (name, password, salt)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (name, password)
+      VALUES ($1, $2)
       RETURNING id;
     `;
 
-    const values = [name, hashedPassword, salt];
+    const values = [name, hashedPassword];
 
     const result = await pool.query(query, values);
     console.log(`User registered with ID: ${result.rows[0].id}`);
