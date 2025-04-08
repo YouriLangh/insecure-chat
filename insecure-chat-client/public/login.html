@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Insecure Chat</title>
+
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
+
+    <script type="text/javascript">
+        let ipcRenderer = require('electron').ipcRenderer;
+
+        function login() {
+            const userName = document.getElementById("inputUserName").value;
+
+            ipcRenderer.send('login', { name: userName });
+        }
+    </script>
+</head>
+
+
+<body>
+    <br><br><br><br>
+    <div style="width:400px; margin:0 auto;">
+        <div class="form-group">
+            <label for="inputUserName" style="font-weight: bold; margin-bottom: 0.5em;">Username</label>
+            <input type="string" class="form-control" name="username" id="inputUserName" placeholder="Enter name" autofocus>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="margin-top: 1em;" onclick="login()" >Login</button>
+    </div>
+</body>
+
+</html>

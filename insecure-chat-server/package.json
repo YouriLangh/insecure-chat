@@ -1,0 +1,16 @@
+{
+  "name": "insecure-chat-server",
+  "version": "1.0.0",
+  "description": "A simple insecure chat server",
+  "main": "index.js",
+  "author": "Jim Bauwens",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}
