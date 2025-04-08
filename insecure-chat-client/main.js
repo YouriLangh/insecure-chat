@@ -1,7 +1,13 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
-const { error } = require("node:console");
 const path = require("node:path");
+const https = require("https");
 const sanitizeHtml = require("sanitize-html");
+const fs = require("fs");
+
+const caPath = path.join(__dirname, "certs", "rootCA.pem");
+const ca = fs.readFileSync(caPath);
+
+const agent = new https.Agent({ ca });
 
 function openLogin(win) {
   win.loadFile("public/login.html");
@@ -10,7 +16,7 @@ function openLogin(win) {
 function openChat(win, data) {
   win.loadFile("public/chat.html");
 }
-
+process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 function createWindow() {
   const win = new BrowserWindow({
     width: 800,
@@ -64,6 +70,14 @@ ipcMain.on("register", function (event, data) {
   const pwd = data.password;
   // Ensure a maximum size and minimum size for names
   if (cleanName.length > 5 && cleanName.length < 15 && isValidUsername) {
+    console.log("Making a call");
+    fetch("https://localhost:3000/", {
+      method: "GET",
+      agent,
+    })
+      .then((res) => res.text())
+      .then((data) => console.log("Received:", data))
+      .catch((err) => console.error("HTTPS request failed:", err));
     console.log("Tests succeeded");
     userData.name = cleanName;
     event.reply("registration-success");

@@ -1,5 +1,7 @@
 # insecure-chat
 
+Step 0:
+Ran npm audit fix to fix any vulnerabilities in the packages (server side)
 Step 1:
 Started by sanitizing the login input with sanitize-html, and then an additional regex to ensure only characters/numbers were used
 
@@ -9,5 +11,7 @@ Added password fields and a register form to ensure users are unique & authentic
 Step 3:
 Created a CA (using mkcert) on the local device to ensure HTTPS connection for safe transfer or login/register data to the server.
 (Perhaps still vulnerable from the local device)
+Run mkcert -CAROOT
+to make this work on localhost
 
 Step 4:

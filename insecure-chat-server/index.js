@@ -13,6 +13,7 @@ const Users = require("./users.js");
 const options = {
   key: fs.readFileSync(path.join(__dirname, "certs", "localhost-key.pem")),
   cert: fs.readFileSync(path.join(__dirname, "certs", "localhost.pem")),
+  ca: fs.readFileSync(path.join(__dirname, "certs", "rootCA.pem")),
 };
 
 // Load application config/state
@@ -23,6 +24,12 @@ const server = https.createServer(options, app).listen(port, () => {
 });
 
 const io = require("socket.io")(server);
+
+// TODO: Remove test path
+app.get("/", (req, res) => {
+  console.log("Received query");
+  res.status(200).send("Backend is secure via HTTPS!");
+});
 
 ///////////////////////////////
 // Chatroom helper functions //
