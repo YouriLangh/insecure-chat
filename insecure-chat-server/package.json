@@ -7,7 +7,10 @@
   "private": true,
   "license": "MIT",
   "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.7",
     "express": "^4.19.2",
+    "pg": "^8.14.1",
     "socket.io": "^4.7.5"
   },
   "scripts": {

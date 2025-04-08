@@ -5,10 +5,47 @@ const path = require("path");
 const port = process.env.PORT || 3000;
 const fs = require("fs");
 const https = require("https");
+const { Pool } = require("pg");
+app.use(express.json());
 
+// require('dotenv').config();
 const Rooms = require("./rooms.js");
 const Users = require("./users.js");
+const bcrypt = require("bcrypt");
+// Database connection setup
+const pool = new Pool({
+  user: process.env.DB_USER || "postgres",
+  host: process.env.DB_HOST || "localhost",
+  database: process.env.DB_NAME || "postgres",
+  password: process.env.DB_PASSWORD || "mysecretpassword",
+  port: process.env.DB_PORT || 5431,
+});
 
+async function runMigrations() {
+  try {
+    const migrationFile = path.join(__dirname, "init.sql");
+    const sql = fs.readFileSync(migrationFile, "utf8");
+
+    const client = await pool.connect();
+    try {
+      await client.query(sql); // Run the migration query
+      console.log("Migrations applied successfully!");
+    } catch (error) {
+      console.error("Error applying migrations:", error);
+    } finally {
+      client.release();
+    }
+
+    console.log("Connected to the database successfully!");
+  } catch (err) {
+    console.error(
+      "Error reading migration file or connecting to the database:",
+      err
+    );
+  }
+}
+
+runMigrations();
 // Read certs
 const options = {
   key: fs.readFileSync(path.join(__dirname, "certs", "localhost-key.pem")),
@@ -25,10 +62,46 @@ const server = https.createServer(options, app).listen(port, () => {
 
 const io = require("socket.io")(server);
 
-// TODO: Remove test path
-app.get("/", (req, res) => {
-  console.log("Received query");
-  res.status(200).send("Backend is secure via HTTPS!");
+app.post("/register", async (req, res) => {
+  const { name, password } = req.body;
+
+  if (!name || !password) {
+    return res.status(400).send("Missing credentials");
+  }
+
+  try {
+    // Check if the user already exists
+    const findUserQuery = `
+      SELECT * FROM users WHERE name = $1;
+    `;
+
+    const findUserResult = await pool.query(findUserQuery, [name]);
+
+    if (findUserResult.rows.length > 0) {
+      return res.status(400).send("User already exists");
+    }
+
+    // Generate a salt and hash the password using it
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Insert the new user into the database
+    const query = `
+      INSERT INTO users (name, password, salt)
+      VALUES ($1, $2, $3)
+      RETURNING id;
+    `;
+
+    const values = [name, hashedPassword, salt];
+
+    const result = await pool.query(query, values);
+    console.log(`User registered with ID: ${result.rows[0].id}`);
+
+    res.send("Registration successful");
+  } catch (error) {
+    console.error("Registration failed:", error);
+    res.status(500).send("Registration error");
+  }
 });
 
 ///////////////////////////////

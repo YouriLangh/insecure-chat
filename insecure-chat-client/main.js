@@ -61,26 +61,43 @@ ipcMain.on("login", function (event, data) {
 });
 
 ipcMain.on("register", function (event, data) {
-  // Sanitizing user input on login
   const cleanName = sanitizeHtml(data.name);
-  // Ensure only characters & digits are used
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
+  const pwd = data.password;
+
   console.log("User login name (post clean): ", cleanName);
 
-  const pwd = data.password;
-  // Ensure a maximum size and minimum size for names
-  if (cleanName.length > 5 && cleanName.length < 15 && isValidUsername) {
-    console.log("Making a call");
-    fetch("https://localhost:3000/", {
-      method: "GET",
+  if (
+    cleanName.length > 5 &&
+    cleanName.length < 15 &&
+    isValidUsername &&
+    pwd.length >= 5
+  ) {
+    console.log("Making HTTPS POST call to /register");
+
+    fetch("https://localhost:3000/register", {
+      method: "POST",
       agent,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: cleanName,
+        password: pwd,
+      }),
     })
       .then((res) => res.text())
-      .then((data) => console.log("Received:", data))
-      .catch((err) => console.error("HTTPS request failed:", err));
-    console.log("Tests succeeded");
-    userData.name = cleanName;
-    event.reply("registration-success");
+      .then((data) => {
+        console.log("Server response:", data);
+        event.reply("registration-success");
+      })
+      .catch((err) => {
+        console.error("HTTPS request failed:", err);
+        event.reply("registration-failed");
+      });
+  } else {
+    console.log("Invalid username or password");
+    event.reply("registration-failed");
   }
 });
 
