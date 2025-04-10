@@ -90,7 +90,7 @@ const options = {
 };
 
 // Load application config/state
-require("./basicstate.js").setup(Users, Rooms);
+// require("./basicstate.js").setup(Users, Rooms);
 
 const server = https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS server running at https://localhost:${port}`);
@@ -121,7 +121,9 @@ app.post("/register", async (req, res) => {
       SELECT * FROM users WHERE name = $1;
     `;
 
-    const findUserResult = await pool.query(findUserQuery, [cleanName]);
+    const findUserResult = await pool.query(findUserQuery, [
+      cleanName.toLowerCase(),
+    ]); // Case insensitive
 
     if (findUserResult.rows.length > 0) {
       return res.status(400).send("User already exists");
@@ -136,7 +138,7 @@ app.post("/register", async (req, res) => {
       RETURNING id;
     `;
 
-    const values = [cleanName, hashedPassword];
+    const values = [cleanName.toLowerCase(), hashedPassword];
 
     const result = await pool.query(query, values);
     console.log(`User registered with ID: ${result.rows[0].id}`);
@@ -172,7 +174,9 @@ app.post("/login", authLimiter, async (req, res) => {
     const findUserQuery = `
       SELECT password FROM users WHERE name = $1
     `;
-    const findUserResult = await pool.query(findUserQuery, [name]);
+    const findUserResult = await pool.query(findUserQuery, [
+      name.toLowerCase(),
+    ]);
 
     if (findUserResult.rows.length === 0) {
       return res.status(400).send("No user exists by that username");

@@ -41,6 +41,11 @@ Add sanitation on all possible inputs on client side.
 - Add channel (name and description)
 - Message
 
+Step 11:
+Move to database
+
+Step 12: Case insensitive checks for user registration / login
+
 Next steps:
 Ensure storage on db and not in local memory
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
