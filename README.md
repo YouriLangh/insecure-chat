@@ -35,17 +35,20 @@ Added rate limiting on login path to ensure people cannot spam attempts
 Step 9: (basically same as HTTPS)
 Switch to WSS as we are now operating on HTTPS
 
-Next steps:
+Step 10:
 Add sanitation on all possible inputs on client side.
 
-Ensure storage on db and not in local memory
-add openid
-Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
+- Add channel (name and description)
+- Message
 
-Sanitize on server side for every request.
-JWT & session management.
-Add rate limiting on server side for logins
-Perhaps helmet for secure headers and CSP !!!!!
-Enforce HTTPS on server side?? Helmet can do this i think
+Next steps:
+Ensure storage on db and not in local memory
+Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
 Ensure users can only register by comparing with LOWERCASE letters.
 Ensure regex's cant be the cause of DoS attacks
+Sanitize on server side for every request.
+JWT & session management.
+Perhaps helmet for secure headers and CSP !!!!! ==> Not too sure if i am forcing these things yet
+Enforce HTTPS on server side?? Helmet can do this i think
+
+add openid

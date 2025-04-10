@@ -41,6 +41,9 @@ async function runMigrations() {
     try {
       await client.query(sql); // Run the migration query
       console.log("Migrations applied successfully!");
+      // Initialize state
+      await initializeState();
+      console.log("Initial state applied successfully!");
     } catch (error) {
       console.error("Error applying migrations:", error);
     } finally {
@@ -53,6 +56,28 @@ async function runMigrations() {
       "Error reading migration file or connecting to the database:",
       err
     );
+  }
+}
+
+async function initializeState() {
+  const initState = [
+    ["random", "Random!", true, false],
+    ["general", "interesting things", true, false],
+    ["private", "some very private channel", true, true],
+  ];
+
+  const query = `
+  INSERT INTO rooms (name, description, force_membership, private)
+  VALUES ($1, $2, $3, $4)
+  `;
+
+  // Use Promise.all to handle async tasks properly
+  const promises = initState.map((room) => pool.query(query, room));
+  try {
+    // Wait for all the insert operations to complete
+    await Promise.all(promises);
+  } catch (error) {
+    console.error("Error inserting initial state:", error);
   }
 }
 
@@ -157,7 +182,7 @@ app.post("/login", authLimiter, async (req, res) => {
     const samePwd = await bcrypt.compare(password, hashedUserPwd);
 
     if (!samePwd) {
-      return res.status(400).send("Incorrect password");
+      return res.status(400).send("Incorrect credentials");
     }
 
     // User is authenticated successfully

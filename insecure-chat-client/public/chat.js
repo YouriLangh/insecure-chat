@@ -1,5 +1,6 @@
 const io = require("socket.io-client");
 const electron = require("electron");
+const sanitizeHtml = require("sanitize-html");
 
 const SERVER = "localhost";
 const PORT = 3000;
@@ -198,13 +199,13 @@ function load(userdata) {
 
   function sendMessage() {
     let message = $inputMessage.val();
-
+    const cleanMessage = sanitizeHtml(message); // Might be useless
     if (message && connected && currentRoom !== false) {
       $inputMessage.val("");
 
       const msg = {
         username: username,
-        message: message,
+        message: cleanMessage,
         room: currentRoom.id,
       };
 
@@ -219,14 +220,17 @@ function load(userdata) {
       hour: "numeric",
       minute: "numeric",
     });
-
+    const cleanMessage = sanitizeHtml(msg.message, {
+      allowedTags: [], // Don't allow any formatting
+      allowedAttributes: {}, // Or possibly exploitable attributes (onError etc)
+    });
     $messages.append(`
       <div class="message">
         <div class="message-avatar"></div>
         <div class="message-textual">
           <span class="message-user">${msg.username}</span>
           <span class="message-time">${time}</span>
-          <span class="message-content">${msg.message}</span>
+          <span class="message-content">${cleanMessage}</span>
         </div>
       </div>
     `);
@@ -245,9 +249,12 @@ function load(userdata) {
     const description = $("#inp-channel-description").val();
     const private_ = $("#inp-private").is(":checked");
 
+    // Sanitizing names & description
+    const cleanName = sanitizeHtml(name);
+    const cleanDescription = sanitizeHtml(description);
     socket.emit("add_channel", {
-      name: name,
-      description: description,
+      name: cleanName,
+      description: cleanDescription,
       private: private_,
     });
   }
