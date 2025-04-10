@@ -48,8 +48,8 @@ Step 12: Case insensitive checks for user registration / login
 
 Next steps:
 Ensure storage on db and not in local memory
+
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
-Ensure users can only register by comparing with LOWERCASE letters.
 Ensure regex's cant be the cause of DoS attacks
 Sanitize on server side for every request.
 JWT & session management.

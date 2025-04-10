@@ -31,3 +31,10 @@ CREATE TABLE IF NOT EXISTS messages (
     message TEXT NOT NULL,
     timestamp BIGINT NOT NULL
 );
+
+-- Create Subscriptions Table
+CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, room_id)
+);

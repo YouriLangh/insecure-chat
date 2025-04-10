@@ -1,50 +1,42 @@
-const users = {};
+module.exports = (pool) => ({
+  getUserByName: async (name) => {
+    const res = await pool.query("SELECT * FROM users WHERE name = $1", [
+      name.toLowerCase(),
+    ]);
+    return res.rows[0] || null;
+  },
 
-class User {
-    constructor(name) {
-        this.name = name;
+  getUsers: async () => {
+    const res = await pool.query("SELECT name, active FROM users");
+    return res.rows;
+  },
 
-        this.active = false;
-        this.subscriptions = [];
-    }
+  getUserRoomIds: async (userId) => {
+    const res = await pool.query(
+      "SELECT room_id FROM user_rooms WHERE user_id = $1",
+      [userId]
+    );
+    return res.rows.map((row) => row.room_id);
+  },
 
-    getSubscriptions() {
-        return this.subscriptions;
-    }
+  addUserToRoom: async (userId, roomId) => {
+    await pool.query(
+      `INSERT INTO user_rooms (user_id, room_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, roomId]
+    );
+  },
 
-    addSubscription(room) {
-        const id = room.getId();
+  removeUserFromRoom: async (userId, roomId) => {
+    await pool.query(
+      `DELETE FROM user_rooms WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId]
+    );
+  },
 
-        if (this.subscriptions.indexOf(id) === -1)
-            this.subscriptions.push(id);
-    }
-
-    removeSubscription(room) {
-        const id = room.getId();
-
-        const idx = this.subscriptions.indexOf(id);
-        if (idx >= 0)
-            this.subscriptions.splice(idx, 1);
-    }
-
-    setActiveState(b) {
-        this.active = b;
-    }
-
-}
-
-module.exports = {
-    addUser: name => {
-        const user = new User(name);
-        users[name] = user;
-        return user;
-    },
-
-    getUser: name => {
-        return users[name];
-    },
-
-    getUsers: () => {
-        return Object.values(users);
-    }
-}
+  setUserActiveState: async (username, active) => {
+    await pool.query("UPDATE users SET active = $1 WHERE name = $2", [
+      active,
+      username.toLowerCase(),
+    ]);
+  },
+});

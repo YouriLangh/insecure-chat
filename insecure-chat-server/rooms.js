@@ -1,70 +1,44 @@
-const rooms = [];
-let roomIdCounter = 0;
+module.exports = (pool) => ({
+  addRoom: async (name, options = {}) => {
+    const res = await pool.query(
+      `INSERT INTO rooms (name, description, force_membership, private, direct)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+      [
+        name,
+        options.description || "",
+        !!options.forceMembership,
+        !!options.private,
+        !!options.direct,
+      ]
+    );
+    return res.rows[0];
+  },
 
-class Room {
-    constructor(id, name, options) {
-        this.id   =  id;
-        this.name =  name;
+  getRoom: async (id) => {
+    const res = await pool.query("SELECT * FROM rooms WHERE id = $1", [id]);
+    return res.rows[0] || null;
+  },
 
-        this.description = options.description || "";
-      
-        this.forceMembership = !!options.forceMembership;
-        this.private         = !!options.private;
-        this.direct          = !!options.direct;
-  
-        this.members = [];
-        this.history = [];
-    }
+  getRooms: async () => {
+    const res = await pool.query("SELECT * FROM rooms");
+    return res.rows;
+  },
 
-    getId() {
-        return this.id;
-    }
+  getForcedRooms: async () => {
+    const res = await pool.query(
+      "SELECT * FROM rooms WHERE force_membership = true"
+    );
+    return res.rows;
+  },
 
-    getMembers() {
-        return this.members;
-    }
-
-    getMemberCount(){
-        return this.members.length;
-    }
-
-    addMember(user) {
-        if (this.members.indexOf(user.name) === -1)
-            this.members.push(user.name);
-    }
-
-    removeMember(user) {        
-        const idx = this.members.indexOf(user.name);
-        if (idx >= 0)
-            this.members.splice(idx, 1);
-    }
-
-    getHistory() {
-        return this.history;
-    }
-
-    addMessage(msg) {
-        this.history.push(msg);
-    }
-}
-
-module.exports = {
-    addRoom: (name, options) => {
-        const id = roomIdCounter++;
-        const room = new Room(id, name, options);
-        rooms[id] = room;
-        return room;
-    },
-
-    getRooms: () => {
-        return rooms;
-    },
-
-    getForcedRooms: () => {
-        return rooms.filter(r => r.forceMembership);
-    },
-
-    getRoom: id => {
-        return rooms[id];
-    }
-}
+  getRoomMembers: async (roomId) => {
+    const res = await pool.query(
+      `SELECT u.name FROM user_rooms ur
+         JOIN users u ON u.id = ur.user_id
+         WHERE ur.room_id = $1`,
+      [roomId]
+    );
+    return res.rows.map((row) => row.name);
+  },
+});
