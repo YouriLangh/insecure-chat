@@ -47,7 +47,7 @@ Move to database
 Step 12: Case insensitive checks for user registration / login
 
 Next steps:
-Ensure storage on db and not in local memory
+Ensure storage on db and not in local memory ==> Altered all the required methods in users.js and rooms.js. Altered any function (calls) in index.js too. TEst this tomorrow.
 
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
 Ensure regex's cant be the cause of DoS attacks

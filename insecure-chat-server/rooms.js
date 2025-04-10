@@ -24,6 +24,19 @@ module.exports = (pool) => ({
     const res = await pool.query("SELECT * FROM rooms");
     return res.rows;
   },
+  addMember: async (roomId, userId) => {
+    const res = await pool.query(
+      `INSERT INTO user_rooms (user_id, room_id)
+           VALUES ($1, $2)`,
+      [userId, roomId]
+    );
+  },
+  removeMember: async (roomId, userId) => {
+    const res = await pool.query(
+      `REMOVE FROM user_rooms WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId]
+    );
+  },
 
   getForcedRooms: async () => {
     const res = await pool.query(

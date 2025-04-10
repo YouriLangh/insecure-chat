@@ -39,4 +39,23 @@ module.exports = (pool) => ({
       username.toLowerCase(),
     ]);
   },
+  addSubscription: async (userId, roomId) => {
+    await pool.query(
+      `INSERT INTO subscriptions (user_id, room_id) VALUES ($1, $2) ON CONFLICT DO NOHTING`,
+      [userId, roomId]
+    );
+  },
+  removeSubscription: async (userId, roomId) => {
+    await pool.query(
+      `DELETE FROM subscriptions WHERE user_id = $1 AND room_id = $2`,
+      [userId, roomId]
+    );
+  },
+  getSubscriptions: async (userId) => {
+    const res = await pool.query(
+      `SELECT room_id FROM subscriptions WHERE user_id = $1`,
+      [userId]
+    );
+    return res.rows;
+  },
 });

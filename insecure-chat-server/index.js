@@ -20,8 +20,9 @@ const authLimiter = rateLimit({
 });
 
 // require('dotenv').config();
-const Rooms = require("./rooms.js");
-const Users = require("./users.js");
+const Rooms = require("./rooms.js")(pool);
+const Users = require("./users.js")(pool);
+
 const bcrypt = require("bcrypt");
 // Database connection setup
 const pool = new Pool({
@@ -89,9 +90,6 @@ const options = {
   ca: fs.readFileSync(path.join(__dirname, "certs", "rootCA.pem")),
 };
 
-// Load application config/state
-// require("./basicstate.js").setup(Users, Rooms);
-
 const server = https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS server running at https://localhost:${port}`);
 });
@@ -141,7 +139,25 @@ app.post("/register", async (req, res) => {
     const values = [cleanName.toLowerCase(), hashedPassword];
 
     const result = await pool.query(query, values);
-    console.log(`User registered with ID: ${result.rows[0].id}`);
+    const user_id = result.rows[0].id;
+    console.log(`User registered with ID: ${user_id}`);
+
+    // TODO: make this a separate function
+    // add the forced rooms to the user
+    const forcedRoomsRes = await pool.query(
+      `SELECT id FROM rooms WHERE force_membership = true`
+    );
+    const forcedRooms = forcedRoomsRes.rows;
+    // Add user to each forced room
+    const addToRoomQuery = `
+INSERT INTO user_rooms (user_id, room_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+`;
+
+    for (const room of forcedRooms) {
+      await pool.query(addToRoomQuery, [user_id, room.id]);
+    }
 
     res.status(200).send("Registration successful");
   } catch (error) {
@@ -202,18 +218,7 @@ app.post("/login", authLimiter, async (req, res) => {
 ///////////////////////////////
 
 function sendToRoom(room, event, data) {
-  io.to("room" + room.getId()).emit(event, data);
-}
-
-function newUser(name) {
-  const user = Users.addUser(name);
-  const rooms = Rooms.getForcedRooms();
-
-  rooms.forEach((room) => {
-    addUserToRoom(user, room);
-  });
-
-  return user;
+  io.to("room" + room.id).emit(event, data);
 }
 
 function newRoom(name, user, options) {
@@ -254,30 +259,30 @@ function getDirectRoom(user_a, user_b) {
 }
 
 function addUserToRoom(user, room) {
-  user.addSubscription(room);
-  room.addMember(user);
+  Users.addSubscription(user.id, room.id);
+  Rooms.addMember(room.id, user.id);
 
   sendToRoom(room, "update_user", {
-    room: room.getId(),
+    room: room.id,
     username: user,
     action: "added",
-    members: room.getMembers(),
+    members: Rooms.getRoomMembers(room.id),
   });
 }
 
 function removeUserFromRoom(user, room) {
-  user.removeSubscription(room);
-  room.removeMember(user);
+  Users.removeSubscription(user.id, room.id);
+  Rooms.removeMember(room.id, user.id);
 
   sendToRoom(room, "update_user", {
-    room: room.getId(),
+    room: room.id,
     username: user,
     action: "removed",
-    members: room.getMembers(),
+    members: Rooms.getRoomMembers(room.id),
   });
 }
 
-function addMessageToRoom(roomId, username, msg) {
+async function addMessageToRoom(roomId, username, msg) {
   const room = Rooms.getRoom(roomId);
 
   msg.time = new Date().getTime();
@@ -290,15 +295,14 @@ function addMessageToRoom(roomId, username, msg) {
       time: msg.time,
       direct: room.direct,
     });
-
-    room.addMessage(msg);
+    const addMsgQuery = `INSERT INTO messages (room_id, username, message, time)
+         VALUES ($1, $2, $3, $4)`;
+    await pool.query(addMsgQuery);
   }
 }
 
 function setUserActiveState(socket, username, state) {
-  const user = Users.getUser(username);
-
-  if (user) user.setActiveState(state);
+  Users.setUserActiveState(username, state);
 
   socket.broadcast.emit("user_state_change", {
     username: username,
@@ -335,12 +339,12 @@ io.on("connection", (socket) => {
 
   socket.on("request_direct_room", (req) => {
     if (userLoggedIn) {
-      const user_a = Users.getUser(req.to);
-      const user_b = Users.getUser(username);
+      const user_a = Users.getUserByName(req.to);
+      const user_b = Users.getUserByName(username);
 
       if (user_a && user_b) {
         const room = getDirectRoom(user_a, user_b);
-        const roomCID = "room" + room.getId();
+        const roomCID = "room" + room.id;
         socket.join(roomCID);
         if (socketmap[user_a.name]) socketmap[user_a.name].join(roomCID);
 
@@ -354,10 +358,10 @@ io.on("connection", (socket) => {
 
   socket.on("add_channel", (req) => {
     if (userLoggedIn) {
-      const user = Users.getUser(username);
+      const user = Users.getUserByName(username);
       console.log(req);
       const room = newChannel(req.name, req.description, req.private, user);
-      const roomCID = "room" + room.getId();
+      const roomCID = "room" + room.id;
       socket.join(roomCID);
 
       socket.emit("update_room", {
@@ -378,13 +382,13 @@ io.on("connection", (socket) => {
 
   socket.on("join_channel", (req) => {
     if (userLoggedIn) {
-      const user = Users.getUser(username);
+      const user = Users.getUserByName(username);
       const room = Rooms.getRoom(req.id);
 
       if (!room.direct && !room.private) {
         addUserToRoom(user, room);
 
-        const roomCID = "room" + room.getId();
+        const roomCID = "room" + room.id;
         socket.join(roomCID);
 
         socket.emit("update_room", {
@@ -397,14 +401,14 @@ io.on("connection", (socket) => {
 
   socket.on("add_user_to_channel", (req) => {
     if (userLoggedIn) {
-      const user = Users.getUser(req.user);
+      const user = Users.getUserByName(req.user);
       const room = Rooms.getRoom(req.channel);
 
       if (!room.direct) {
         addUserToRoom(user, room);
 
         if (socketmap[user.name]) {
-          const roomCID = "room" + room.getId();
+          const roomCID = "room" + room.id;
           socketmap[user.name].join(roomCID);
 
           socketmap[user.name].emit("update_room", {
@@ -418,17 +422,17 @@ io.on("connection", (socket) => {
 
   socket.on("leave_channel", (req) => {
     if (userLoggedIn) {
-      const user = Users.getUser(username);
+      const user = Users.getUserByName(username);
       const room = Rooms.getRoom(req.id);
 
       if (!room.direct && !room.forceMembership) {
         removeUserFromRoom(user, room);
 
-        const roomCID = "room" + room.getId();
+        const roomCID = "room" + room.id;
         socket.leave(roomCID);
 
         socket.emit("remove_room", {
-          room: room.getId(),
+          room: room.id,
         });
       }
     }
@@ -445,9 +449,9 @@ io.on("connection", (socket) => {
     userLoggedIn = true;
     socketmap[username] = socket;
 
-    const user = Users.getUser(username) || newUser(username);
+    const user = Users.getUserByName(username); // No more need to create a user as they should be registered before using the app
 
-    const rooms = user.getSubscriptions().map((s) => {
+    const rooms = Users.getSubscriptions(user.id).map((s) => {
       socket.join("room" + s);
       return Rooms.getRoom(s);
     });
