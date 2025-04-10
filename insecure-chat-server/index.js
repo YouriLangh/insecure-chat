@@ -6,7 +6,18 @@ const port = process.env.PORT || 3000;
 const fs = require("fs");
 const https = require("https");
 const { Pool } = require("pg");
+const sanitizeHtml = require("sanitize-html");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+
 app.use(express.json());
+app.use(helmet());
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 1000, // limit to 10 requests per 15 min per IP
+  message: "Too many attempts. Try again later.",
+});
 
 // require('dotenv').config();
 const Rooms = require("./rooms.js");
@@ -64,24 +75,34 @@ const io = require("socket.io")(server);
 
 app.post("/register", async (req, res) => {
   const { name, password } = req.body;
-
+  const cleanName = sanitizeHtml(name);
+  const cleanPwd = sanitizeHtml(password);
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
+  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   if (!name || !password) {
     return res.status(400).send("Missing credentials");
   }
-
+  if (
+    cleanName !== name ||
+    cleanPwd !== password ||
+    !isValidPwd ||
+    !isValidUsername
+  ) {
+    return res.status(400).send("Corrupted credentials");
+  }
   try {
     // Check if the user already exists
     const findUserQuery = `
       SELECT * FROM users WHERE name = $1;
     `;
 
-    const findUserResult = await pool.query(findUserQuery, [name]);
+    const findUserResult = await pool.query(findUserQuery, [cleanName]);
 
     if (findUserResult.rows.length > 0) {
       return res.status(400).send("User already exists");
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(cleanPwd, 10);
 
     // Insert the new user into the database
     const query = `
@@ -90,23 +111,35 @@ app.post("/register", async (req, res) => {
       RETURNING id;
     `;
 
-    const values = [name, hashedPassword];
+    const values = [cleanName, hashedPassword];
 
     const result = await pool.query(query, values);
     console.log(`User registered with ID: ${result.rows[0].id}`);
 
-    res.send("Registration successful");
+    res.status(200).send("Registration successful");
   } catch (error) {
     console.error("Registration failed:", error);
     res.status(500).send("Registration error");
   }
 });
 
-app.post("/login", async (req, res) => {
+app.post("/login", authLimiter, async (req, res) => {
   const { name, password } = req.body;
 
+  const cleanName = sanitizeHtml(name);
+  const cleanPwd = sanitizeHtml(password);
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
+  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   if (!name || !password) {
     return res.status(400).send("Missing credentials");
+  }
+  if (
+    cleanName !== name ||
+    cleanPwd !== password ||
+    !isValidPwd ||
+    !isValidUsername
+  ) {
+    return res.status(400).send("Corrupted credentials");
   }
 
   try {

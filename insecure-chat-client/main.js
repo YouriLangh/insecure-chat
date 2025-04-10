@@ -45,22 +45,23 @@ let userData = {
 
 ipcMain.on("login", function (event, data) {
   // From reading documentation, we know that sanitize-html still allows for certain edge cases:
-  const dirtyTest = "<>alert('xss')"; // Is sanitized to :  &lt;&gt;alert('xss')
+  // "<>alert('xss')"  Is sanitized to :  &lt;&gt;alert('xss')
 
   // Sanitizing user input on login
   const cleanName = sanitizeHtml(data.name);
-  // Ensure only characters & digits are used
+  // Ensure only characters & digits are used in both the password & username
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   const pwd = data.password;
-  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(pwd);
-  console.log("User login name (post clean): ", cleanName);
+  const cleanPwd = sanitizeHtml(pwd); // sanitize password aswell
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
 
   // Ensure a maximum size and minimum size for names
   if (
     cleanName.length > 5 &&
     cleanName.length < 15 &&
     isValidUsername &&
-    isValidPwd
+    isValidPwd &&
+    pwd === cleanPwd // Prevent any injections in the password field. Most likely overkill.
   ) {
     fetch("https://localhost:3000/login", {
       method: "POST",
@@ -73,9 +74,17 @@ ipcMain.on("login", function (event, data) {
         password: pwd,
       }),
     })
-      .then((res) => res.text())
+      .then((res) => {
+        if (!res.ok) {
+          return res.text().then((errorMessage) => {
+            throw new Error(
+              errorMessage || `Request failed with status ${res.status}`
+            );
+          });
+        }
+        return res.text();
+      })
       .then((data) => {
-        console.log("Server response:", data);
         userData.name = cleanName;
         openChat(BrowserWindow.getAllWindows()[0], data);
         event.reply("registration-success");
@@ -85,7 +94,9 @@ ipcMain.on("login", function (event, data) {
         event.reply("registration-failed");
       });
   } else {
-    console.log("Invalid username or password");
+    console.log(
+      "Invalid username or password. Ensure username is longer than 5 characters."
+    );
     event.reply("registration-failed");
   }
 });
@@ -94,17 +105,17 @@ ipcMain.on("register", function (event, data) {
   const cleanName = sanitizeHtml(data.name);
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   const pwd = data.password;
-
-  console.log("User register name (post clean): ", cleanName);
+  const cleanPwd = sanitizeHtml(pwd);
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
 
   if (
-    cleanName.length > 5 &&
+    cleanName.length >= 5 &&
     cleanName.length < 15 &&
     isValidUsername &&
-    pwd.length >= 5
+    pwd.length >= 5 &&
+    isValidPwd &&
+    cleanPwd === pwd
   ) {
-    console.log("Making HTTPS POST call to /register");
-
     fetch("https://localhost:3000/register", {
       method: "POST",
       agent,
@@ -116,9 +127,17 @@ ipcMain.on("register", function (event, data) {
         password: pwd,
       }),
     })
-      .then((res) => res.text())
+      .then((res) => {
+        if (!res.ok) {
+          return res.text().then((errorMessage) => {
+            throw new Error(
+              errorMessage || `Request failed with status ${res.status}`
+            );
+          });
+        }
+        return res.text();
+      })
       .then((data) => {
-        console.log("Server response:", data);
         event.reply("registration-success");
       })
       .catch((err) => {
@@ -126,7 +145,9 @@ ipcMain.on("register", function (event, data) {
         event.reply("registration-failed");
       });
   } else {
-    console.log("Invalid username or password");
+    console.log(
+      "Invalid username or password. Ensure both the password and username are of length >=5"
+    );
     event.reply("registration-failed");
   }
 });

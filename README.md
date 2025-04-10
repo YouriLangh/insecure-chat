@@ -19,15 +19,33 @@ A simple DB is made in a container from the postgres image.
 Users are then added to the database, with encrypted passwords. (if no other user with that name exists) Salts dont need to be stored as bcrypt stores them in the hash itself.
 For logging in, we ensure a user exists and compared the plaintext pwd with the stored hash.
 
+Step 5:
+Correctly parametrizing SQL queries:
+pg (node-postgres) is used to safely prepare and bind parameters.
+
+Step 6:
+Sanitizing inputs on teh server side (to prevent MiTM) attacks
+
+Step 7: Using helmet as a middleware
+to ensure CSP & HTTPs n such
+
+Step 8:
+Added rate limiting on login path to ensure people cannot spam attempts
+
+Step 9: (basically same as HTTPS)
+Switch to WSS as we are now operating on HTTPS
+
 Next steps:
-Correct the login (an error on server is still interpreted as a success during login, and perhaps registration as well.)
-
-Verify that this is the safest way to do it.
-Ensure everything is correctly sanitized
-How to sanitize passwords?? ==> Check that input = sanitization and validation
-
 Add sanitation on all possible inputs on client side.
-ensure sanitation on server side, no SQL injections possible. Perhaps also do HTML injections or so (if MITM replaces message)
+
 Ensure storage on db and not in local memory
 add openid
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
+
+Sanitize on server side for every request.
+JWT & session management.
+Add rate limiting on server side for logins
+Perhaps helmet for secure headers and CSP !!!!!
+Enforce HTTPS on server side?? Helmet can do this i think
+Ensure users can only register by comparing with LOWERCASE letters.
+Ensure regex's cant be the cause of DoS attacks

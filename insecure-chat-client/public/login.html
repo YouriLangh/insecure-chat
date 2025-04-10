@@ -17,6 +17,14 @@
           mode === "login" ? "block" : "none";
         document.getElementById("signup-section").style.display =
           mode === "signup" ? "block" : "none";
+        document.getElementById("signupUserName").value =
+          mode === "login"
+            ? ""
+            : document.getElementById("signupUserName").value;
+        document.getElementById("signupPassword").value =
+          mode === "login"
+            ? ""
+            : document.getElementById("signupPassword").value;
       }
       function login() {
         const userName = document.getElementById("loginUserName").value;
