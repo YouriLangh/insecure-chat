@@ -44,13 +44,22 @@ Add sanitation on all possible inputs on client side.
 Step 11:
 Move to database
 
-Step 12: Case insensitive checks for user registration / login
+Step 12: Case insensitive checks for user registration / login ==> removed!!!
+
+Step 13:
+Had to perform id -1 on frontend very often (all but once, as postgres starts on 1 for serials but with array indexing we needed 0)
+
+When fetching rooms & their messages, use a diff func & do this for messages:
+new Date(msg.time).toLocaleTimeString("en-US", {
+hour12: false,
+hour: "numeric",
+minute: "numeric",
+});
 
 Next steps:
-Ensure storage on db and not in local memory ==> Altered all the required methods in users.js and rooms.js. Altered any function (calls) in index.js too. TEst this tomorrow.
-
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
 Ensure regex's cant be the cause of DoS attacks
+Perform E2EE
 Sanitize on server side for every request. ==> Should be fine tbh.
 JWT & session management.
 Perhaps helmet for secure headers and CSP !!!!! ==> Not too sure if i am forcing these things yet

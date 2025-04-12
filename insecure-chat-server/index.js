@@ -43,8 +43,7 @@ async function runMigrations() {
       await client.query(sql); // Run the migration query
       console.log("Migrations applied successfully!");
       // Initialize state
-      // await initializeState();
-      console.log("Initial state applied successfully!");
+      await initializeState();
     } catch (error) {
       console.error("Error applying migrations:", error);
     } finally {
@@ -61,24 +60,37 @@ async function runMigrations() {
 }
 
 async function initializeState() {
-  const initState = [
-    ["random", "Random!", true, false],
-    ["general", "interesting things", true, false],
-    ["private", "some very private channel", true, true],
-  ];
+  // Check if the rooms table already contains any rows
+  const checkQuery = "SELECT COUNT(*) FROM rooms";
 
-  const query = `
-  INSERT INTO rooms (name, description, force_membership, private)
-  VALUES ($1, $2, $3, $4)
-  `;
-
-  // Use Promise.all to handle async tasks properly
-  const promises = initState.map((room) => pool.query(query, room));
   try {
-    // Wait for all the insert operations to complete
-    await Promise.all(promises);
+    const result = await pool.query(checkQuery);
+    const count = parseInt(result.rows[0].count, 10);
+
+    // If there are no rooms, initialize the state
+    if (count === 0) {
+      const initState = [
+        ["random", "Random!", true, false],
+        ["general", "interesting things", true, false],
+        ["private", "some very private channel", true, true],
+      ];
+
+      const query = `
+        INSERT INTO rooms (name, description, force_membership, private)
+        VALUES ($1, $2, $3, $4)
+      `;
+
+      // Use Promise.all to handle async tasks properly
+      const promises = initState.map((room) => pool.query(query, room));
+
+      // Wait for all the insert operations to complete
+      await Promise.all(promises);
+      console.log("Initial state inserted into rooms table.");
+    } else {
+      console.log("Rooms table already has data, skipping initialization.");
+    }
   } catch (error) {
-    console.error("Error inserting initial state:", error);
+    console.error("Error checking or inserting initial state:", error);
   }
 }
 
@@ -471,7 +483,10 @@ io.on("connection", (socket) => {
       active: u.active,
     }));
 
-    console.log("Sending data to the user:", users, rooms, publicChannels);
+    console.log("Sending data to the user:", rooms);
+    rooms.map((r) =>
+      console.log(`Messages of room (${r.id}): ${JSON.stringify(r.history)}`)
+    );
     socket.emit("login", {
       users,
       rooms,
