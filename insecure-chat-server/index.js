@@ -20,8 +20,6 @@ const authLimiter = rateLimit({
 });
 
 // require('dotenv').config();
-const Rooms = require("./rooms.js")(pool);
-const Users = require("./users.js")(pool);
 
 const bcrypt = require("bcrypt");
 // Database connection setup
@@ -33,6 +31,8 @@ const pool = new Pool({
   port: process.env.DB_PORT || 5431,
 });
 
+const Rooms = require("./rooms.js")(pool);
+const Users = require("./users.js")(pool);
 async function runMigrations() {
   try {
     const migrationFile = path.join(__dirname, "init.sql");
@@ -43,7 +43,7 @@ async function runMigrations() {
       await client.query(sql); // Run the migration query
       console.log("Migrations applied successfully!");
       // Initialize state
-      await initializeState();
+      // await initializeState();
       console.log("Initial state applied successfully!");
     } catch (error) {
       console.error("Error applying migrations:", error);
@@ -119,9 +119,7 @@ app.post("/register", async (req, res) => {
       SELECT * FROM users WHERE name = $1;
     `;
 
-    const findUserResult = await pool.query(findUserQuery, [
-      cleanName.toLowerCase(),
-    ]); // Case insensitive
+    const findUserResult = await pool.query(findUserQuery, [cleanName]); // Case sensitive!!
 
     if (findUserResult.rows.length > 0) {
       return res.status(400).send("User already exists");
@@ -136,7 +134,7 @@ app.post("/register", async (req, res) => {
       RETURNING id;
     `;
 
-    const values = [cleanName.toLowerCase(), hashedPassword];
+    const values = [cleanName, hashedPassword];
 
     const result = await pool.query(query, values);
     const user_id = result.rows[0].id;
@@ -149,14 +147,8 @@ app.post("/register", async (req, res) => {
     );
     const forcedRooms = forcedRoomsRes.rows;
     // Add user to each forced room
-    const addToRoomQuery = `
-INSERT INTO user_rooms (user_id, room_id)
-VALUES ($1, $2)
-ON CONFLICT DO NOTHING;
-`;
-
     for (const room of forcedRooms) {
-      await pool.query(addToRoomQuery, [user_id, room.id]);
+      await addUserToRoom(result.rows[0], room);
     }
 
     res.status(200).send("Registration successful");
@@ -190,9 +182,7 @@ app.post("/login", authLimiter, async (req, res) => {
     const findUserQuery = `
       SELECT password FROM users WHERE name = $1
     `;
-    const findUserResult = await pool.query(findUserQuery, [
-      name.toLowerCase(),
-    ]);
+    const findUserResult = await pool.query(findUserQuery, [name]);
 
     if (findUserResult.rows.length === 0) {
       return res.status(400).send("No user exists by that username");
@@ -221,33 +211,35 @@ function sendToRoom(room, event, data) {
   io.to("room" + room.id).emit(event, data);
 }
 
-function newRoom(name, user, options) {
-  const room = Rooms.addRoom(name, options);
-  addUserToRoom(user, room);
+async function newRoom(name, user, options) {
+  const room = await Rooms.addRoom(name, options);
+  await addUserToRoom(user, room);
   return room;
 }
 
-function newChannel(name, description, private, user) {
-  return newRoom(name, user, {
+async function newChannel(name, description, private, user) {
+  return await newRoom(name, user, {
     description: description,
     private: private,
   });
 }
 
-function newDirectRoom(user_a, user_b) {
-  const room = Rooms.addRoom(`Direct-${user_a.name}-${user_b.name}`, {
+async function newDirectRoom(user_a, user_b) {
+  const room = await Rooms.addRoom(`Direct-${user_a.name}-${user_b.name}`, {
     direct: true,
     private: true,
   });
 
-  addUserToRoom(user_a, room);
-  addUserToRoom(user_b, room);
+  await addUserToRoom(user_a, room);
+  await addUserToRoom(user_b, room);
 
   return room;
 }
 
-function getDirectRoom(user_a, user_b) {
-  const rooms = Rooms.getRooms().filter(
+async function getDirectRoom(user_a, user_b) {
+  const rooms = await Rooms.getRooms();
+
+  rooms.filter(
     (r) =>
       r.direct &&
       ((r.members[0] == user_a.name && r.members[1] == user_b.name) ||
@@ -255,35 +247,36 @@ function getDirectRoom(user_a, user_b) {
   );
 
   if (rooms.length == 1) return rooms[0];
-  else return newDirectRoom(user_a, user_b);
+  else return await newDirectRoom(user_a, user_b);
 }
 
-function addUserToRoom(user, room) {
-  Users.addSubscription(user.id, room.id);
-  Rooms.addMember(room.id, user.id);
+async function addUserToRoom(user, room) {
+  console.log("Attempting to add user to room...", user, "room: ", room);
+  await Users.addSubscription(user.id, room.id);
+  await Rooms.addMember(room.id, user.id);
 
   sendToRoom(room, "update_user", {
     room: room.id,
     username: user,
     action: "added",
-    members: Rooms.getRoomMembers(room.id),
+    members: await Rooms.getRoomMembers(room.id),
   });
 }
 
-function removeUserFromRoom(user, room) {
-  Users.removeSubscription(user.id, room.id);
-  Rooms.removeMember(room.id, user.id);
+async function removeUserFromRoom(user, room) {
+  await Users.removeSubscription(user.id, room.id);
+  await Rooms.removeMember(room.id, user.id);
 
   sendToRoom(room, "update_user", {
     room: room.id,
     username: user,
     action: "removed",
-    members: Rooms.getRoomMembers(room.id),
+    members: await Rooms.getRoomMembers(room.id),
   });
 }
 
 async function addMessageToRoom(roomId, username, msg) {
-  const room = Rooms.getRoom(roomId);
+  const room = await Rooms.getRoom(roomId);
 
   msg.time = new Date().getTime();
 
@@ -297,12 +290,12 @@ async function addMessageToRoom(roomId, username, msg) {
     });
     const addMsgQuery = `INSERT INTO messages (room_id, username, message, time)
          VALUES ($1, $2, $3, $4)`;
-    await pool.query(addMsgQuery);
+    await pool.query(addMsgQuery, [roomId, username, msg.message, msg.time]);
   }
 }
 
-function setUserActiveState(socket, username, state) {
-  Users.setUserActiveState(username, state);
+async function setUserActiveState(socket, username, state) {
+  await Users.setUserActiveState(username, state);
 
   socket.broadcast.emit("user_state_change", {
     username: username,
@@ -326,10 +319,10 @@ io.on("connection", (socket) => {
   // incomming message //
   ///////////////////////
 
-  socket.on("new message", (msg) => {
+  socket.on("new message", async (msg) => {
     if (userLoggedIn) {
       console.log(msg);
-      addMessageToRoom(msg.room, username, msg);
+      await addMessageToRoom(msg.room, username, msg);
     }
   });
 
@@ -337,13 +330,13 @@ io.on("connection", (socket) => {
   // request for direct room //
   /////////////////////////////
 
-  socket.on("request_direct_room", (req) => {
+  socket.on("request_direct_room", async (req) => {
     if (userLoggedIn) {
-      const user_a = Users.getUserByName(req.to);
-      const user_b = Users.getUserByName(username);
+      const user_a = await Users.getUserByName(req.to);
+      const user_b = await Users.getUserByName(username);
 
       if (user_a && user_b) {
-        const room = getDirectRoom(user_a, user_b);
+        const room = await getDirectRoom(user_a, user_b);
         const roomCID = "room" + room.id;
         socket.join(roomCID);
         if (socketmap[user_a.name]) socketmap[user_a.name].join(roomCID);
@@ -356,11 +349,16 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("add_channel", (req) => {
+  socket.on("add_channel", async (req) => {
     if (userLoggedIn) {
-      const user = Users.getUserByName(username);
+      const user = await Users.getUserByName(username);
       console.log(req);
-      const room = newChannel(req.name, req.description, req.private, user);
+      const room = await newChannel(
+        req.name,
+        req.description,
+        req.private,
+        user
+      );
       const roomCID = "room" + room.id;
       socket.join(roomCID);
 
@@ -370,9 +368,8 @@ io.on("connection", (socket) => {
       });
 
       if (!room.private) {
-        const publicChannels = Rooms.getRooms().filter(
-          (r) => !r.direct && !r.private
-        );
+        const rooms = await Rooms.getRooms();
+        const publicChannels = rooms.filter((r) => !r.direct && !r.private);
         socket.broadcast.emit("update_public_channels", {
           publicChannels: publicChannels,
         });
@@ -380,13 +377,13 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("join_channel", (req) => {
+  socket.on("join_channel", async (req) => {
     if (userLoggedIn) {
-      const user = Users.getUserByName(username);
-      const room = Rooms.getRoom(req.id);
+      const user = await Users.getUserByName(username);
+      const room = await Rooms.getRoom(req.id);
 
       if (!room.direct && !room.private) {
-        addUserToRoom(user, room);
+        await addUserToRoom(user, room);
 
         const roomCID = "room" + room.id;
         socket.join(roomCID);
@@ -399,13 +396,13 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("add_user_to_channel", (req) => {
+  socket.on("add_user_to_channel", async (req) => {
     if (userLoggedIn) {
-      const user = Users.getUserByName(req.user);
-      const room = Rooms.getRoom(req.channel);
+      const user = await Users.getUserByName(req.user);
+      const room = await Rooms.getRoom(req.channel);
 
       if (!room.direct) {
-        addUserToRoom(user, room);
+        await addUserToRoom(user, room);
 
         if (socketmap[user.name]) {
           const roomCID = "room" + room.id;
@@ -420,13 +417,13 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("leave_channel", (req) => {
+  socket.on("leave_channel", async (req) => {
     if (userLoggedIn) {
-      const user = Users.getUserByName(username);
-      const room = Rooms.getRoom(req.id);
+      const user = await Users.getUserByName(username);
+      const room = await Rooms.getRoom(req.id);
 
       if (!room.direct && !room.forceMembership) {
-        removeUserFromRoom(user, room);
+        await removeUserFromRoom(user, room);
 
         const roomCID = "room" + room.id;
         socket.leave(roomCID);
@@ -442,49 +439,61 @@ io.on("connection", (socket) => {
   // user join //
   ///////////////
 
-  socket.on("join", (p_username) => {
+  socket.on("join", async (p_username) => {
     if (userLoggedIn) return;
 
     username = p_username;
     userLoggedIn = true;
     socketmap[username] = socket;
 
-    const user = Users.getUserByName(username); // No more need to create a user as they should be registered before using the app
+    const user = await Users.getUserByName(username);
 
-    const rooms = Users.getSubscriptions(user.id).map((s) => {
-      socket.join("room" + s);
-      return Rooms.getRoom(s);
-    });
+    // Get subscribed room IDs
+    const roomIds = await Users.getSubscriptions(user.id);
 
-    const publicChannels = Rooms.getRooms().filter(
-      (r) => !r.direct && !r.private
-    );
+    console.log("User is subscribed to the following rooms:", roomIds);
+    // Join rooms and fetch their data
+    const rooms = [];
 
+    for (const roomId of roomIds) {
+      const id = roomId.room_id; // or roomId.id if that's your structure
+      socket.join("room" + id);
+
+      const room = await Rooms.getRoom(id);
+      rooms.push(room);
+    }
+
+    const publicChannels = rooms.filter((r) => !r.direct && !r.private);
+    console.log("Public channels:", publicChannels);
+
+    const users = (await Users.getUsers()).map((u) => ({
+      username: u.name,
+      active: u.active,
+    }));
+
+    console.log("Sending data to the user:", users, rooms, publicChannels);
     socket.emit("login", {
-      users: Users.getUsers().map((u) => ({
-        username: u.name,
-        active: u.active,
-      })),
-      rooms: rooms,
-      publicChannels: publicChannels,
+      users,
+      rooms,
+      publicChannels,
     });
 
-    setUserActiveState(socket, username, true);
+    await setUserActiveState(socket, username, true);
   });
 
   ////////////////
   // reconnects //
   ////////////////
 
-  socket.on("reconnect", () => {
-    if (userLoggedIn) setUserActiveState(socket, username, true);
+  socket.on("reconnect", async () => {
+    if (userLoggedIn) await setUserActiveState(socket, username, true);
   });
 
   /////////////////
   // disconnects //
   /////////////////
 
-  socket.on("disconnect", () => {
-    if (userLoggedIn) setUserActiveState(socket, username, false);
+  socket.on("disconnect", async () => {
+    if (userLoggedIn) await setUserActiveState(socket, username, false);
   });
 });

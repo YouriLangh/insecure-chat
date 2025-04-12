@@ -57,7 +57,7 @@ ipcMain.on("login", function (event, data) {
 
   // Ensure a maximum size and minimum size for names
   if (
-    cleanName.length > 5 &&
+    cleanName.length >= 5 &&
     cleanName.length < 15 &&
     isValidUsername &&
     isValidPwd &&

@@ -51,7 +51,7 @@ Ensure storage on db and not in local memory ==> Altered all the required method
 
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
 Ensure regex's cant be the cause of DoS attacks
-Sanitize on server side for every request.
+Sanitize on server side for every request. ==> Should be fine tbh.
 JWT & session management.
 Perhaps helmet for secure headers and CSP !!!!! ==> Not too sure if i am forcing these things yet
 Enforce HTTPS on server side?? Helmet can do this i think

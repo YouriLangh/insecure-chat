@@ -97,12 +97,12 @@ function load(userdata) {
   }
 
   function updateRoom(room) {
-    rooms[room.id] = room;
+    rooms[room.id - 1] = room;
     updateRoomList();
   }
 
   function removeRoom(id) {
-    delete rooms[id];
+    delete rooms[id - 1];
     updateRoomList();
   }
 
@@ -123,7 +123,7 @@ function load(userdata) {
 
     c.empty();
     channels.forEach((r) => {
-      if (!rooms[r.id])
+      if (!rooms[r.id - 1])
         c.append(`
           <button type="button" class="list-group-item list-group-item-action" data-bs-dismiss="modal" onclick="joinChannel(${r.id})">${r.name}</button>
         `);
@@ -139,9 +139,12 @@ function load(userdata) {
   function setRoom(id) {
     let oldRoom = currentRoom;
 
-    const room = rooms[id];
+    const room = rooms[id - 1];
     currentRoom = room;
-
+    if (!room.history) {
+      console.error("Room history not found:", room);
+      return;
+    }
     $messages.empty();
     room.history.forEach((m) => addChatMessage(m));
 
@@ -305,7 +308,7 @@ function load(userdata) {
   // Whenever the server emits -login-, log the login message
   socket.on("login", (data) => {
     connected = true;
-
+    console.log(data.users, data.rooms, data.publicChannels);
     updateUsers(data.users);
     updateRooms(data.rooms);
     updateChannels(data.publicChannels);
@@ -322,7 +325,8 @@ function load(userdata) {
   // Whenever the server emits 'new message', update the chat body
   socket.on("new message", (msg) => {
     const roomId = msg.room;
-    const room = rooms[roomId];
+    const room = rooms[roomId - 1];
+    console.log("I got a new message");
     if (room) {
       room.history.push(msg);
     }
@@ -332,7 +336,7 @@ function load(userdata) {
   });
 
   socket.on("update_user", (data) => {
-    const room = rooms[data.room];
+    const room = rooms[data.room - 1];
     if (room) {
       room.members = data.members;
 

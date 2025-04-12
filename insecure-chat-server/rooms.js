@@ -12,17 +12,74 @@ module.exports = (pool) => ({
         !!options.direct,
       ]
     );
+    console.log(
+      "Adding a room, with name: ",
+      name,
+      "returning the object: ",
+      res.rows[0]
+    );
     return res.rows[0];
   },
 
+  // Todo, fetch the members and messages and store them in members, and .history fields. to send ot frontend
   getRoom: async (id) => {
-    const res = await pool.query("SELECT * FROM rooms WHERE id = $1", [id]);
-    return res.rows[0] || null;
+    const roomQuery = await pool.query("SELECT * FROM rooms WHERE id = $1", [
+      id,
+    ]);
+    const room = roomQuery.rows[0];
+
+    if (!room) return null;
+
+    // Fetch members for the room
+    const membersQuery = await pool.query(
+      `SELECT u.name FROM user_rooms ur
+       JOIN users u ON u.id = ur.user_id
+       WHERE ur.room_id = $1`,
+      [id]
+    );
+    room.members = membersQuery.rows.map((row) => row.name);
+
+    // Fetch message history for the room
+    const messagesQuery = await pool.query(
+      `SELECT m.username, m.message, m.time
+       FROM messages m
+       WHERE m.room_id = $1
+       ORDER BY m.time ASC`,
+      [id]
+    );
+    room.history = messagesQuery.rows;
+
+    return room;
   },
 
+  // Get all rooms with their members and history
   getRooms: async () => {
-    const res = await pool.query("SELECT * FROM rooms");
-    return res.rows;
+    const roomsQuery = await pool.query("SELECT * FROM rooms");
+    const rooms = roomsQuery.rows;
+
+    // For each room, fetch its members and history
+    for (let room of rooms) {
+      // Fetch members
+      const membersQuery = await pool.query(
+        `SELECT u.name FROM user_rooms ur
+         JOIN users u ON u.id = ur.user_id
+         WHERE ur.room_id = $1`,
+        [room.id]
+      );
+      room.members = membersQuery.rows.map((row) => row.name);
+
+      // Fetch message history
+      const messagesQuery = await pool.query(
+        `SELECT m.username, m.message, m.time
+         FROM messages m
+         WHERE m.room_id = $1
+         ORDER BY m.time ASC`,
+        [room.id]
+      );
+      room.history = messagesQuery.rows;
+    }
+
+    return rooms;
   },
   addMember: async (roomId, userId) => {
     const res = await pool.query(

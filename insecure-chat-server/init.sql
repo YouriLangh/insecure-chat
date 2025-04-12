@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS messages (
     room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
     username TEXT NOT NULL,
     message TEXT NOT NULL,
-    timestamp BIGINT NOT NULL
+    time BIGINT NOT NULL
 );
 
 -- Create Subscriptions Table
