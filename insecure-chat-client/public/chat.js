@@ -152,6 +152,7 @@ function load(userdata) {
     $roomList.find("li").removeClass("active");
 
     if (room.direct) {
+      console.log("Direct room has these members:", room.members);
       const idx = room.members.indexOf(username) == 0 ? 1 : 0;
       const user = room.members[idx];
       setDirectRoomHeader(user);

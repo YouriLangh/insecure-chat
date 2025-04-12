@@ -244,22 +244,36 @@ async function newDirectRoom(user_a, user_b) {
 
   await addUserToRoom(user_a, room);
   await addUserToRoom(user_b, room);
-
+  room.members = [user_a.name, user_b.name];
   return room;
 }
 
 async function getDirectRoom(user_a, user_b) {
-  const rooms = await Rooms.getRooms();
+  let rooms = await Rooms.getRooms();
+  console.log(`All rooms: ${JSON.stringify(rooms)}`);
+  // TODO This does not find the existing room
 
-  rooms.filter(
+  rooms = rooms.filter(
     (r) =>
       r.direct &&
       ((r.members[0] == user_a.name && r.members[1] == user_b.name) ||
         (r.members[1] == user_a.name && r.members[0] == user_b.name))
   );
+  rooms.map(
+    (r) =>
+      `Room ${r.id} has members: ${
+        r.members
+      }. A direct room with me and the person exists already? ${
+        (r.members[0] == user_a.name && r.members[1] == user_b.name) ||
+        (r.members[1] == user_a.name && r.members[0] == user_b.name)
+      }`
+  );
 
   if (rooms.length == 1) return rooms[0];
-  else return await newDirectRoom(user_a, user_b);
+  else {
+    console.log("Have to add new direct room");
+    return await newDirectRoom(user_a, user_b);
+  }
 }
 
 async function addUserToRoom(user, room) {
@@ -476,17 +490,11 @@ io.on("connection", (socket) => {
     }
 
     const publicChannels = rooms.filter((r) => !r.direct && !r.private);
-    console.log("Public channels:", publicChannels);
 
     const users = (await Users.getUsers()).map((u) => ({
       username: u.name,
       active: u.active,
     }));
-
-    console.log("Sending data to the user:", rooms);
-    rooms.map((r) =>
-      console.log(`Messages of room (${r.id}): ${JSON.stringify(r.history)}`)
-    );
     socket.emit("login", {
       users,
       rooms,

@@ -44,12 +44,7 @@ module.exports = (pool) => {
           !!options.direct,
         ]
       );
-      console.log(
-        "Adding a room, with name: ",
-        name,
-        "returning the object: ",
-        res.rows[0]
-      );
+      console.log("Adding a room, with name: ", name);
       const room = res.rows[0];
       if (!room) return null;
       room.members = [];

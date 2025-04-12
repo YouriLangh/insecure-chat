@@ -49,17 +49,13 @@ Step 12: Case insensitive checks for user registration / login ==> removed!!!
 Step 13:
 Had to perform id -1 on frontend very often (all but once, as postgres starts on 1 for serials but with array indexing we needed 0)
 
-When fetching rooms & their messages, use a diff func & do this for messages:
-new Date(msg.time).toLocaleTimeString("en-US", {
-hour12: false,
-hour: "numeric",
-minute: "numeric",
-});
+Direct rooms are not working, a new direct room is made each time, probably due to gettin a username first n then the other
 
 Next steps:
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
 Ensure regex's cant be the cause of DoS attacks
 Perform E2EE
+When user leaves a channel, remove their ui and reset to general chat. Otherwise they can still see messages.
 Sanitize on server side for every request. ==> Should be fine tbh.
 JWT & session management.
 Perhaps helmet for secure headers and CSP !!!!! ==> Not too sure if i am forcing these things yet
