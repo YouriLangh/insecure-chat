@@ -4,11 +4,12 @@ const https = require("https");
 const sanitizeHtml = require("sanitize-html");
 const fs = require("fs");
 
-const caPath = path.join(__dirname, "certs", "rootCA.pem");
+// New certs const caPath = path.join(__dirname, "certs", "rootCA.pem");
+const caPath = path.join(__dirname, "certs2", "rootCA.pem");
 const ca = fs.readFileSync(caPath);
 
-const agent = new https.Agent({ ca });
-
+const agent = new https.Agent({ ca: ca });
+process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 function openLogin(win) {
   win.loadFile("public/login.html");
 }
@@ -16,7 +17,6 @@ function openLogin(win) {
 function openChat(win, data) {
   win.loadFile("public/chat.html");
 }
-process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 function createWindow() {
   const win = new BrowserWindow({
     width: 800,

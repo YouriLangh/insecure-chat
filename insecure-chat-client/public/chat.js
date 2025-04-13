@@ -34,6 +34,7 @@ function load(userdata) {
     transports: ["websocket"],
     secure: true,
     rejectUnauthorized: false,
+    // ca,
   });
 
   let modalShowing = false;
@@ -368,7 +369,7 @@ function load(userdata) {
 
   socket.on("remove_room", (data) => {
     removeRoom(data.room);
-    if (currentRoom.id == data.room) setRoom(0);
+    if (currentRoom.id == data.room) setRoom(1);
   });
 
   ////////////////

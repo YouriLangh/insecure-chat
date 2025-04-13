@@ -13,9 +13,10 @@ const rateLimit = require("express-rate-limit");
 app.use(express.json());
 app.use(helmet());
 
+// C:\Users\BRYAN\AppData\Local\mkcert
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 1000, // limit to 10 requests per 15 min per IP
+  max: 10, // limit to 10 requests per 15 min per IP
   message: "Too many attempts. Try again later.",
 });
 
@@ -101,17 +102,20 @@ const options = {
   cert: fs.readFileSync(path.join(__dirname, "certs", "localhost.pem")),
   ca: fs.readFileSync(path.join(__dirname, "certs", "rootCA.pem")),
 };
-
 const server = https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS server running at https://localhost:${port}`);
 });
 
 const io = require("socket.io")(server);
 
-app.post("/register", async (req, res) => {
+app.post("/register", authLimiter, async (req, res) => {
   const { name, password } = req.body;
+  if (name.length > 100 || password.length > 100) {
+    return res.status(400).send("Input too long");
+  }
   const cleanName = sanitizeHtml(name);
   const cleanPwd = sanitizeHtml(password);
+
   const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   if (!name || !password) {
@@ -152,8 +156,6 @@ app.post("/register", async (req, res) => {
     const user_id = result.rows[0].id;
     console.log(`User registered with ID: ${user_id}`);
 
-    // TODO: make this a separate function
-    // add the forced rooms to the user
     const forcedRoomsRes = await pool.query(
       `SELECT id FROM rooms WHERE force_membership = true`
     );
@@ -172,7 +174,9 @@ app.post("/register", async (req, res) => {
 
 app.post("/login", authLimiter, async (req, res) => {
   const { name, password } = req.body;
-
+  if (name.length > 100 || password.length > 100) {
+    return res.status(400).send("Input too long");
+  }
   const cleanName = sanitizeHtml(name);
   const cleanPwd = sanitizeHtml(password);
   const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
