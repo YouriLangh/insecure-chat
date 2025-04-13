@@ -160,7 +160,7 @@ app.post("/register", async (req, res) => {
     const forcedRooms = forcedRoomsRes.rows;
     // Add user to each forced room
     for (const room of forcedRooms) {
-      await addUserToRoom(result.rows[0], room);
+      let result = await addUserToRoom(result.rows[0], room);
     }
 
     res.status(200).send("Registration successful");
@@ -224,8 +224,8 @@ function sendToRoom(room, event, data) {
 }
 
 async function newRoom(name, user, options) {
-  const room = await Rooms.addRoom(name, options);
-  await addUserToRoom(user, room);
+  let room = await Rooms.addRoom(name, options);
+  room = await addUserToRoom(user, room);
   return room;
 }
 
@@ -237,36 +237,23 @@ async function newChannel(name, description, private, user) {
 }
 
 async function newDirectRoom(user_a, user_b) {
-  const room = await Rooms.addRoom(`Direct-${user_a.name}-${user_b.name}`, {
+  let room = await Rooms.addRoom(`Direct-${user_a.name}-${user_b.name}`, {
     direct: true,
     private: true,
   });
 
-  await addUserToRoom(user_a, room);
-  await addUserToRoom(user_b, room);
-  room.members = [user_a.name, user_b.name];
+  room = await addUserToRoom(user_a, room);
+  room = await addUserToRoom(user_b, room);
   return room;
 }
 
 async function getDirectRoom(user_a, user_b) {
   let rooms = await Rooms.getRooms();
-  console.log(`All rooms: ${JSON.stringify(rooms)}`);
-  // TODO This does not find the existing room
-
   rooms = rooms.filter(
     (r) =>
       r.direct &&
       ((r.members[0] == user_a.name && r.members[1] == user_b.name) ||
         (r.members[1] == user_a.name && r.members[0] == user_b.name))
-  );
-  rooms.map(
-    (r) =>
-      `Room ${r.id} has members: ${
-        r.members
-      }. A direct room with me and the person exists already? ${
-        (r.members[0] == user_a.name && r.members[1] == user_b.name) ||
-        (r.members[1] == user_a.name && r.members[0] == user_b.name)
-      }`
   );
 
   if (rooms.length == 1) return rooms[0];
@@ -277,16 +264,17 @@ async function getDirectRoom(user_a, user_b) {
 }
 
 async function addUserToRoom(user, room) {
-  console.log("Attempting to add user to room...", user, "room: ", room);
   await Users.addSubscription(user.id, room.id);
   await Rooms.addMember(room.id, user.id);
-
+  const members = await Rooms.getRoomMembers(room.id);
   sendToRoom(room, "update_user", {
     room: room.id,
     username: user,
     action: "added",
-    members: await Rooms.getRoomMembers(room.id),
+    members: members,
   });
+  room.members = members;
+  return room;
 }
 
 async function removeUserFromRoom(user, room) {
@@ -406,10 +394,10 @@ io.on("connection", (socket) => {
   socket.on("join_channel", async (req) => {
     if (userLoggedIn) {
       const user = await Users.getUserByName(username);
-      const room = await Rooms.getRoom(req.id);
+      let room = await Rooms.getRoom(req.id);
 
       if (!room.direct && !room.private) {
-        await addUserToRoom(user, room);
+        room = await addUserToRoom(user, room);
 
         const roomCID = "room" + room.id;
         socket.join(roomCID);
@@ -425,10 +413,10 @@ io.on("connection", (socket) => {
   socket.on("add_user_to_channel", async (req) => {
     if (userLoggedIn) {
       const user = await Users.getUserByName(req.user);
-      const room = await Rooms.getRoom(req.channel);
+      let room = await Rooms.getRoom(req.channel);
 
       if (!room.direct) {
-        await addUserToRoom(user, room);
+        room = await addUserToRoom(user, room);
 
         if (socketmap[user.name]) {
           const roomCID = "room" + room.id;
@@ -517,6 +505,7 @@ io.on("connection", (socket) => {
   /////////////////
 
   socket.on("disconnect", async () => {
+    console.log("Disconnecting the user...");
     if (userLoggedIn) await setUserActiveState(socket, username, false);
   });
 });

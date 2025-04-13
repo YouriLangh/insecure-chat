@@ -49,11 +49,18 @@ Step 12: Case insensitive checks for user registration / login ==> removed!!!
 Step 13:
 Had to perform id -1 on frontend very often (all but once, as postgres starts on 1 for serials but with array indexing we needed 0)
 
-Direct rooms are not working, a new direct room is made each time, probably due to gettin a username first n then the other
+Solved:
+nr of members in a channel is wrnog (maybe only newly created one?)
+Users show as online eventhough they aren't. ==> Might be a bug?? Not logging them out perhaps all the time.
 
-Next steps:
+Array on client side is fucked due to ids and private channels.
+To recreate, have 2 clients open, have them both open a private channel. Then disconnect on B and try to navigate to that private channel. and try to click on some of the channels --> Undefined
+FIXED: frontend code used array indexing, now we use find to look for ids. ==> FIXED THEIR CODE XDD LMAO
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!)
 Ensure regex's cant be the cause of DoS attacks
+
+Next steps:
+
 Perform E2EE
 When user leaves a channel, remove their ui and reset to general chat. Otherwise they can still see messages.
 Sanitize on server side for every request. ==> Should be fine tbh.
