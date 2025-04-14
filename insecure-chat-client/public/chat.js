@@ -1,7 +1,7 @@
 const io = require("socket.io-client");
 const electron = require("electron");
 const sanitizeHtml = require("sanitize-html");
-
+const crypto = require("crypto");
 const SERVER = "localhost";
 const PORT = 3000;
 
@@ -24,6 +24,7 @@ function load(userdata) {
   const $usernameLabel = $("#user-name");
   const $roomList = $("#room-list");
   const $userList = $("#user-list");
+  let publicKeyMap = {};
 
   let username = userdata.name;
   $usernameLabel.text(username);
@@ -102,8 +103,8 @@ function load(userdata) {
     if (index !== -1) {
       rooms[index] = room;
     } else {
-      rooms.push(room); // Optionally: add if it doesn't exist
-      console.log("ERROR Update room");
+      // old code:
+      rooms.push(room);
     }
     updateRoomList();
   }
@@ -150,8 +151,6 @@ function load(userdata) {
   function setRoom(id) {
     let oldRoom = currentRoom;
     const room = rooms.find((r) => r.id === id);
-    console.log(rooms);
-    console.log(room);
     currentRoom = room;
     if (!room.history) {
       console.error("Room history not found:", room);
@@ -164,7 +163,6 @@ function load(userdata) {
     $roomList.find("li").removeClass("active");
 
     if (room.direct) {
-      console.log("Direct room has these members:", room.members);
       const idx = room.members.indexOf(username) == 0 ? 1 : 0;
       const user = room.members[idx];
       setDirectRoomHeader(user);
@@ -215,31 +213,112 @@ function load(userdata) {
 
   function sendMessage() {
     let message = $inputMessage.val();
-    const cleanMessage = sanitizeHtml(message); // Might be useless
+    let msgPayload;
     if (message && connected && currentRoom !== false) {
       $inputMessage.val("");
+      const cleanMessage = sanitizeHtml(message);
 
-      const msg = {
-        username: username,
-        message: cleanMessage,
-        room: currentRoom.id,
-      };
+      if (currentRoom.private || currentRoom.direct) {
+        const aesKey = crypto.randomBytes(32); // AES-256
+        const iv = crypto.randomBytes(16);
 
-      //addChatMessage(msg);
-      socket.emit("new message", msg);
+        // Encrypt the message with AES
+        const cipher = crypto.createCipheriv("aes-256-cbc", aesKey, iv);
+        let encryptedMsg = cipher.update(cleanMessage, "utf8", "base64");
+        encryptedMsg += cipher.final("base64");
+
+        // Encrypt AES key for each recipient
+        const encryptedKeys = {};
+
+        currentRoom.members.forEach((member) => {
+          if (publicKeyMap[member]) {
+            try {
+              const encryptedKey = crypto.publicEncrypt(
+                publicKeyMap[member],
+                aesKey
+              );
+              encryptedKeys[member] = encryptedKey.toString("base64");
+            } catch (err) {
+              console.error(`Failed to encrypt for ${member}:`, err);
+            }
+          }
+        });
+
+        msgPayload = {
+          username: username,
+          room: currentRoom.id,
+          message: encryptedMsg,
+          iv: iv.toString("base64"),
+          encryptedKeys,
+        };
+      } else {
+        msgPayload = {
+          username: username,
+          message: cleanMessage,
+          room: currentRoom.id,
+        };
+      }
+      socket.emit("new message", msgPayload);
     }
   }
+  function addEncryptedChatMessage(msg) {
+    let time = new Date(msg.time).toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "numeric",
+      minute: "numeric",
+    });
+    console.log("Adding encrypted message:", msg);
+    let decryptedMessage = "[Could not decrypt]";
+    // Step 1: Decrypt AES key with user's private RSA key
+    try {
+      const encryptedAESKey = Buffer.from(msg.keys[username], "base64");
+      if (!encryptedAESKey) return; // If the user wasn't part of the channel when the messages were sent, dont attempt to decrypt as he does not have acces
+      // to the old symmetric key.
+      const privateKey = userdata.privateKey;
 
+      const aesKey = crypto.privateDecrypt(privateKey, encryptedAESKey);
+
+      // Step 2: Decrypt the message with AES key + IV
+      const iv = Buffer.from(msg.iv, "base64");
+      const encryptedMsg = Buffer.from(msg.message, "base64");
+
+      const decipher = crypto.createDecipheriv("aes-256-cbc", aesKey, iv);
+      decryptedMessage = decipher.update(encryptedMsg, "base64", "utf8");
+      decryptedMessage += decipher.final("utf8");
+    } catch (err) {
+      console.error("Decryption failed:", err);
+    }
+    // Step 3: Sanitize and render
+    const cleanMessage = sanitizeHtml(decryptedMessage, {
+      allowedTags: [],
+      allowedAttributes: {},
+    });
+
+    $messages.append(`
+      <div class="message">
+        <div class="message-avatar"></div>
+        <div class="message-textual">
+          <span class="message-user">${msg.username}</span>
+          <span class="message-time">${time}</span>
+          <span class="message-content">${cleanMessage}</span>
+        </div>
+      </div>
+    `);
+
+    $messages[0].scrollTop = $messages[0].scrollHeight;
+  }
   function addChatMessage(msg) {
     let time = new Date(msg.time).toLocaleTimeString("en-US", {
       hour12: false,
       hour: "numeric",
       minute: "numeric",
     });
+    // Step 3: Sanitize and render
     const cleanMessage = sanitizeHtml(msg.message, {
-      allowedTags: [], // Don't allow any formatting
-      allowedAttributes: {}, // Or possibly exploitable attributes (onError etc)
+      allowedTags: [],
+      allowedAttributes: {},
     });
+
     $messages.append(`
       <div class="message">
         <div class="message-avatar"></div>
@@ -321,14 +400,18 @@ function load(userdata) {
   // Whenever the server emits -login-, log the login message
   socket.on("login", (data) => {
     connected = true;
-    console.log(data.users, data.rooms, data.publicChannels);
     updateUsers(data.users);
     updateRooms(data.rooms);
     updateChannels(data.publicChannels);
-
+    console.log("I logged in.");
     if (data.rooms.length > 0) {
       setRoom(data.rooms[0].id);
     }
+  });
+
+  socket.on("new_public_key", (data) => {
+    console.log("Received public key for new member:", data.username);
+    publicKeyMap[data.username] = data.publicKey;
   });
 
   socket.on("update_public_channels", (data) => {
@@ -339,12 +422,16 @@ function load(userdata) {
   socket.on("new message", (msg) => {
     const roomId = msg.room;
     const room = rooms.find((r) => r.id === roomId);
-    console.log("I got a new message");
     if (room) {
       room.history.push(msg);
     }
 
-    if (roomId == currentRoom.id) addChatMessage(msg);
+    if (roomId == currentRoom.id)
+      if (room.private || room.direct) {
+        addEncryptedChatMessage(msg);
+      } else {
+        addChatMessage(msg);
+      }
     else messageNotify(msg);
   });
 
@@ -362,9 +449,21 @@ function load(userdata) {
     updateUser(data.username, data.active);
   });
 
+  socket.on("receive_public_keys", (keys) => {
+    for (const [user, key] of Object.entries(keys)) {
+      if (!publicKeyMap[user]) {
+        console.log("Added new public key for:", user);
+        publicKeyMap[user] = key;
+      }
+    }
+  });
+
   socket.on("update_room", (data) => {
     updateRoom(data.room);
     if (data.moveto) setRoom(data.room.id);
+    // if (data.room.private || data.room.direct) {
+    //   console.log("I update the public key map", data);
+    // }
   });
 
   socket.on("remove_room", (data) => {

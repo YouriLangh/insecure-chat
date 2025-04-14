@@ -16,7 +16,7 @@ app.use(helmet());
 // C:\Users\BRYAN\AppData\Local\mkcert
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 10, // limit to 10 requests per 15 min per IP
+  max: 100, // limit to 10 requests per 15 min per IP
   message: "Too many attempts. Try again later.",
 });
 
@@ -109,7 +109,7 @@ const server = https.createServer(options, app).listen(port, () => {
 const io = require("socket.io")(server);
 
 app.post("/register", authLimiter, async (req, res) => {
-  const { name, password } = req.body;
+  const { name, password, publicKey } = req.body;
   if (name.length > 100 || password.length > 100) {
     return res.status(400).send("Input too long");
   }
@@ -145,12 +145,12 @@ app.post("/register", authLimiter, async (req, res) => {
 
     // Insert the new user into the database
     const query = `
-      INSERT INTO users (name, password)
-      VALUES ($1, $2)
+      INSERT INTO users (name, password, public_key)
+      VALUES ($1, $2, $3)
       RETURNING id;
     `;
 
-    const values = [cleanName, hashedPassword];
+    const values = [cleanName, hashedPassword, publicKey];
 
     const result = await pool.query(query, values);
     const user_id = result.rows[0].id;
@@ -162,7 +162,7 @@ app.post("/register", authLimiter, async (req, res) => {
     const forcedRooms = forcedRoomsRes.rows;
     // Add user to each forced room
     for (const room of forcedRooms) {
-      let result = await addUserToRoom(result.rows[0], room);
+      let aa = await addUserToRoom(result.rows[0], room);
     }
 
     res.status(200).send("Registration successful");
@@ -277,6 +277,7 @@ async function addUserToRoom(user, room) {
     action: "added",
     members: members,
   });
+
   room.members = members;
   return room;
 }
@@ -295,21 +296,64 @@ async function removeUserFromRoom(user, room) {
 
 async function addMessageToRoom(roomId, username, msg) {
   const room = await Rooms.getRoom(roomId);
-
   msg.time = new Date().getTime();
+  let basePayload;
+  if (!room) return;
+  // Insert into messages table and get message ID
 
-  if (room) {
-    sendToRoom(room, "new message", {
+  if (room.private || room.direct) {
+    basePayload = {
+      username: username,
+      message: msg.message,
+      room: msg.room,
+      time: msg.time,
+      iv: msg.iv,
+      direct: room.direct,
+      keys: msg.encryptedKeys, // { username: encryptedKey }
+    };
+
+    const insertMsgQuery = `
+    INSERT INTO messages (room_id, username, iv, message, time)
+    VALUES ($1, $2, $3, $4, $5) RETURNING id
+  `;
+    const result = await pool.query(insertMsgQuery, [
+      roomId,
+      username,
+      basePayload.iv,
+      basePayload.message,
+      basePayload.time,
+    ]);
+
+    const messageId = result.rows[0].id;
+    // Insert encrypted AES keys per recipient
+    const encryptedKeys = basePayload.keys; // { username: encryptedKey }
+
+    for (const [recipient, encryptedKey] of Object.entries(encryptedKeys)) {
+      const insertKeyQuery = `
+      INSERT INTO message_keys (message_id, recipient, encrypted_key)
+      VALUES ($1, $2, $3)
+    `;
+      await pool.query(insertKeyQuery, [messageId, recipient, encryptedKey]);
+    }
+  } else {
+    const insertMsgQuery = `
+    INSERT INTO messages (room_id, username, message, time)
+    VALUES ($1, $2, $3, $4);
+  `;
+    await pool.query(insertMsgQuery, [roomId, username, msg.message, msg.time]);
+
+    basePayload = {
       username: username,
       message: msg.message,
       room: msg.room,
       time: msg.time,
       direct: room.direct,
-    });
-    const addMsgQuery = `INSERT INTO messages (room_id, username, message, time)
-         VALUES ($1, $2, $3, $4)`;
-    await pool.query(addMsgQuery, [roomId, username, msg.message, msg.time]);
+    };
   }
+  // Send message to room (with all encrypted keys if needed)
+  sendToRoom(room, "new message", {
+    ...basePayload,
+  });
 }
 
 async function setUserActiveState(socket, username, state) {
@@ -356,12 +400,30 @@ io.on("connection", (socket) => {
       if (user_a && user_b) {
         const room = await getDirectRoom(user_a, user_b);
         const roomCID = "room" + room.id;
+
         socket.join(roomCID);
         if (socketmap[user_a.name]) socketmap[user_a.name].join(roomCID);
 
         socket.emit("update_room", {
           room: room,
           moveto: true,
+        });
+
+        // 🔐 Share both users' public keys
+        const keysToSend = {};
+        keysToSend[user_a.name] = user_a.public_key;
+        keysToSend[user_b.name] = user_b.public_key;
+
+        // Send keys to both clients
+        socket.emit("receive_public_keys", keysToSend);
+        if (socketmap[user_a.name]) {
+          socketmap[user_a.name].emit("receive_public_keys", keysToSend);
+        }
+
+        // Also broadcast the new user's key to the room (safety net)
+        sendToRoom(room, "new_public_key", {
+          username: user_b.name,
+          publicKey: user_b.public_key,
         });
       }
     }
@@ -402,9 +464,26 @@ io.on("connection", (socket) => {
 
       if (!room.direct && !room.private) {
         room = await addUserToRoom(user, room);
-
         const roomCID = "room" + room.id;
         socket.join(roomCID);
+
+        // 🔐 Send all existing members' public keys to joining user
+        const memberUsernames = await Rooms.getRoomMembers(room.id);
+        const publicKeys = {};
+        for (const member of memberUsernames) {
+          const memberUser = await Users.getUserByName(member);
+          if (memberUser) {
+            publicKeys[member] = memberUser.public_key;
+          }
+        }
+        socket.emit("receive_public_keys", publicKeys);
+
+        // 📣 Send the new user's public key to others in the room
+        const publicKeyEvent = {
+          username: user.name,
+          publicKey: user.public_key,
+        };
+        sendToRoom(room, "new_public_key", publicKeyEvent);
 
         socket.emit("update_room", {
           room: room,
@@ -479,6 +558,31 @@ io.on("connection", (socket) => {
 
       const room = await Rooms.getRoom(id);
       rooms.push(room);
+      if (room.private || room.direct) {
+        // Broadcast this user's public key to the room
+        const publicKeyEvent = {
+          username: user.name,
+          publicKey: user.public_key,
+        };
+        sendToRoom(room, "new_public_key", publicKeyEvent);
+      }
+    }
+    // Get list of users and their public keys in non-public rooms
+    const publicKeys = {};
+
+    for (const room of rooms) {
+      if (!room.direct && !room.private) continue; // Skip public channels
+
+      const members = await Rooms.getRoomMembers(room.id); // usernames
+
+      for (const member of members) {
+        if (!publicKeys[member]) {
+          const user = await Users.getUserByName(member);
+          if (user) {
+            publicKeys[member] = user.public_key;
+          }
+        }
+      }
     }
 
     const publicChannels = rooms.filter((r) => !r.direct && !r.private);
@@ -492,6 +596,7 @@ io.on("connection", (socket) => {
       rooms,
       publicChannels,
     });
+    socket.emit("receive_public_keys", publicKeys);
 
     await setUserActiveState(socket, username, true);
   });

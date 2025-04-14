@@ -4,6 +4,26 @@ const https = require("https");
 const sanitizeHtml = require("sanitize-html");
 const fs = require("fs");
 
+const { generateKeyPairSync } = require("crypto");
+
+const keysFilePath = path.join(__dirname, "user_keys.json");
+
+function loadAllStoredKeys() {
+  if (!fs.existsSync(keysFilePath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(keysFilePath, "utf8"));
+  } catch (err) {
+    console.error("Failed to read keys file:", err);
+    return {};
+  }
+}
+
+function storeUserKey(username, privateKey) {
+  const allKeys = loadAllStoredKeys();
+  allKeys[username] = privateKey;
+  fs.writeFileSync(keysFilePath, JSON.stringify(allKeys, null, 2), "utf8");
+}
+
 // New certs const caPath = path.join(__dirname, "certs", "rootCA.pem");
 const caPath = path.join(__dirname, "certs2", "rootCA.pem");
 const ca = fs.readFileSync(caPath);
@@ -40,6 +60,7 @@ app.whenReady().then(() => {
 
 let userData = {
   name: false,
+  privateKey: false,
 };
 // Regex to enforce just characters in a name
 
@@ -86,6 +107,14 @@ ipcMain.on("login", function (event, data) {
       })
       .then((data) => {
         userData.name = cleanName;
+        const allKeys = loadAllStoredKeys();
+        const storedKey = allKeys[cleanName];
+
+        if (storedKey) {
+          userData.privateKey = storedKey;
+        } else {
+          console.error(`No stored key found for ${cleanName}`);
+        }
         openChat(BrowserWindow.getAllWindows()[0], data);
         event.reply("registration-success");
       })
@@ -116,6 +145,18 @@ ipcMain.on("register", function (event, data) {
     isValidPwd &&
     cleanPwd === pwd
   ) {
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: "spki",
+        format: "pem",
+      },
+      privateKeyEncoding: {
+        type: "pkcs8",
+        format: "pem",
+      },
+    });
+
     fetch("https://localhost:3000/register", {
       method: "POST",
       agent,
@@ -125,6 +166,7 @@ ipcMain.on("register", function (event, data) {
       body: JSON.stringify({
         name: cleanName,
         password: pwd,
+        publicKey: publicKey,
       }),
     })
       .then((res) => {
@@ -138,6 +180,9 @@ ipcMain.on("register", function (event, data) {
         return res.text();
       })
       .then((data) => {
+        userData.name = cleanName;
+        userData.privateKey = privateKey;
+        storeUserKey(cleanName, privateKey);
         event.reply("registration-success");
       })
       .catch((err) => {
@@ -154,5 +199,4 @@ ipcMain.on("register", function (event, data) {
 
 ipcMain.on("get-user-data", function (event, arg) {
   event.sender.send("user-data", userData);
-  console.log("I am printing this", userData);
 });
