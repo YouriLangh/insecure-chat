@@ -11,15 +11,29 @@ module.exports = (pool) => {
   };
 
   // Helper function to fetch room messages and convert time to readable format
-  const getRoomMessages = async (roomId) => {
-    const messagesQuery = await pool.query(
-      `SELECT m.username, m.message, m.time
-       FROM messages m
-       WHERE m.room_id = $1
-       ORDER BY m.time ASC`,
-      [roomId]
-    );
-    // Convert time to readable format
+  const getRoomMessages = async (roomId, isPrivateOrDirect = false) => {
+    let messagesQuery;
+
+    if (isPrivateOrDirect) {
+      messagesQuery = await pool.query(
+        `SELECT m.username, m.message, m.iv, m.time, json_object_agg(mk.recipient, mk.encrypted_key) as keys
+         FROM messages m
+         LEFT JOIN message_keys mk ON m.id = mk.message_id
+         WHERE m.room_id = $1
+         GROUP BY m.id
+         ORDER BY m.time ASC`,
+        [roomId]
+      );
+    } else {
+      messagesQuery = await pool.query(
+        `SELECT m.username, m.message, m.time
+         FROM messages m
+         WHERE m.room_id = $1
+         ORDER BY m.time ASC`,
+        [roomId]
+      );
+    }
+
     return messagesQuery.rows.map((msg) => ({
       ...msg,
       time: Number(msg.time),
@@ -64,7 +78,7 @@ module.exports = (pool) => {
       room.members = await getRoomMembers(id);
 
       // Fetch message history for the room
-      room.history = await getRoomMessages(id);
+      room.history = await getRoomMessages(id, room.private || room.direct);
 
       return room;
     },
@@ -80,7 +94,10 @@ module.exports = (pool) => {
         room.members = await getRoomMembers(room.id);
 
         // Fetch message history
-        room.history = await getRoomMessages(room.id);
+        room.history = await getRoomMessages(
+          room.id,
+          room.private || room.direct
+        );
       }
 
       return rooms;

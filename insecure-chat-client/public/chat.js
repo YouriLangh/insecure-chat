@@ -157,7 +157,9 @@ function load(userdata) {
       return;
     }
     $messages.empty();
-    room.history.forEach((m) => addChatMessage(m));
+    if (room.direct || room.private) {
+      room.history.forEach((m) => addEncryptedChatMessage(m));
+    } else room.history.forEach((m) => addChatMessage(m));
 
     $userList.find("li").removeClass("active");
     $roomList.find("li").removeClass("active");
@@ -452,7 +454,6 @@ function load(userdata) {
   });
 
   socket.on("receive_public_keys", (keys) => {
-    console.log("kys");
     for (const [user, key] of Object.entries(keys)) {
       if (!publicKeyMap[user]) {
         console.log("Added new public key for:", user);
