@@ -409,22 +409,22 @@ io.on("connection", (socket) => {
           moveto: true,
         });
 
-        // 🔐 Share both users' public keys
-        const keysToSend = {};
-        keysToSend[user_a.name] = user_a.public_key;
-        keysToSend[user_b.name] = user_b.public_key;
+        // // 🔐 Share both users' public keys
+        // const keysToSend = {};
+        // keysToSend[user_a.name] = user_a.public_key;
+        // keysToSend[user_b.name] = user_b.public_key;
 
-        // Send keys to both clients
-        socket.emit("receive_public_keys", keysToSend);
-        if (socketmap[user_a.name]) {
-          socketmap[user_a.name].emit("receive_public_keys", keysToSend);
-        }
+        // // Send keys to both clients
+        // socket.emit("receive_public_keys", keysToSend);
+        // if (socketmap[user_a.name]) {
+        //   socketmap[user_a.name].emit("receive_public_keys", keysToSend);
+        // }
 
-        // Also broadcast the new user's key to the room (safety net)
-        sendToRoom(room, "new_public_key", {
-          username: user_b.name,
-          publicKey: user_b.public_key,
-        });
+        // // Also broadcast the new user's key to the room (safety net)
+        // sendToRoom(room, "new_public_key", {
+        //   username: user_b.name,
+        //   publicKey: user_b.public_key,
+        // });
       }
     }
   });
@@ -487,30 +487,30 @@ io.on("connection", (socket) => {
           const roomCID = "room" + room.id;
           socketmap[user.name].join(roomCID);
 
-          // ✅ Fetch and send all public keys of current members
-          const memberUsernames = await Rooms.getRoomMembers(room.id);
-          const publicKeys = {};
-          for (const member of memberUsernames) {
-            const memberUser = await Users.getUserByName(member);
-            if (memberUser) {
-              publicKeys[member] = memberUser.public_key;
-            }
-          }
+          //       // ✅ Fetch and send all public keys of current members
+          //       const memberUsernames = await Rooms.getRoomMembers(room.id);
+          //       const publicKeys = {};
+          //       for (const member of memberUsernames) {
+          //         const memberUser = await Users.getUserByName(member);
+          //         if (memberUser) {
+          //           publicKeys[member] = memberUser.public_key;
+          //         }
+          //       }
 
-          // ✅ Send all existing keys to the added user
-          socketmap[user.name].emit("receive_public_keys", publicKeys);
+          //       // ✅ Send all existing keys to the added user
+          //       socketmap[user.name].emit("receive_public_keys", publicKeys);
 
-          // ✅ Broadcast added user's key to other members
-          const publicKeyEvent = {
-            username: user.name,
-            publicKey: user.public_key,
-          };
-          sendToRoom(room, "new_public_key", publicKeyEvent);
+          //       // ✅ Broadcast added user's key to other members
+          //       const publicKeyEvent = {
+          //         username: user.name,
+          //         publicKey: user.public_key,
+          //       };
+          //       sendToRoom(room, "new_public_key", publicKeyEvent);
 
-          socketmap[user.name].emit("update_room", {
-            room: room,
-            moveto: false,
-          });
+          //       socketmap[user.name].emit("update_room", {
+          //         room: room,
+          //         moveto: false,
+          //       });
         }
       }
     }
@@ -537,69 +537,37 @@ io.on("connection", (socket) => {
   ///////////////
   // user join //
   ///////////////
-
   socket.on("join", async (p_username) => {
     if (userLoggedIn) return;
-
     username = p_username;
     userLoggedIn = true;
     socketmap[username] = socket;
-
     const user = await Users.getUserByName(username);
-
-    // Get subscribed room IDs
     const roomIds = await Users.getSubscriptions(user.id);
-
-    console.log("User is subscribed to the following rooms:", roomIds);
-    // Join rooms and fetch their data
     const rooms = [];
-
     for (const roomId of roomIds) {
-      const id = roomId.room_id; // or roomId.id if that's your structure
+      const id = roomId.room_id;
       socket.join("room" + id);
-
       const room = await Rooms.getRoom(id);
       rooms.push(room);
-      if (room.private || room.direct) {
-        // Broadcast this user's public key to the room
-        const publicKeyEvent = {
-          username: user.name,
-          publicKey: user.public_key,
-        };
-        sendToRoom(room, "new_public_key", publicKeyEvent);
-      }
     }
-    // Get list of users and their public keys in non-public rooms
-    const publicKeys = {};
-
-    for (const room of rooms) {
-      if (!room.direct && !room.private) continue; // Skip public channels
-
-      const members = await Rooms.getRoomMembers(room.id); // usernames
-
-      for (const member of members) {
-        if (!publicKeys[member]) {
-          const user = await Users.getUserByName(member);
-          if (user) {
-            publicKeys[member] = user.public_key;
-          }
-        }
-      }
-    }
-
     const publicChannels = rooms.filter((r) => !r.direct && !r.private);
-
-    const users = (await Users.getUsers()).map((u) => ({
-      username: u.name,
-      active: u.active,
-    }));
+    const users = await Users.getUsers();
+    const publicKeys = {};
+    users.forEach((u) => {
+      publicKeys[u.name] = u.public_key;
+    });
     socket.emit("login", {
-      users,
+      users: users.map((u) => ({ username: u.name, active: u.active })),
       rooms,
       publicChannels,
     });
     socket.emit("receive_public_keys", publicKeys);
-
+    const publicKeyEvent = {
+      username: user.name,
+      publicKey: user.public_key,
+    };
+    socket.broadcast.emit("new_public_key", publicKeyEvent);
     await setUserActiveState(socket, username, true);
   });
 

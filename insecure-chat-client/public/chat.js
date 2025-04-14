@@ -407,6 +407,8 @@ function load(userdata) {
     if (data.rooms.length > 0) {
       setRoom(data.rooms[0].id);
     }
+    if (data.keys) {
+    }
   });
 
   socket.on("new_public_key", (data) => {
@@ -450,6 +452,7 @@ function load(userdata) {
   });
 
   socket.on("receive_public_keys", (keys) => {
+    console.log("kys");
     for (const [user, key] of Object.entries(keys)) {
       if (!publicKeyMap[user]) {
         console.log("Added new public key for:", user);

@@ -5,7 +5,7 @@ module.exports = (pool) => ({
   },
 
   getUsers: async () => {
-    const res = await pool.query("SELECT name, active FROM users");
+    const res = await pool.query("SELECT * FROM users");
     return res.rows;
   },
 
