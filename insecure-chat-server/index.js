@@ -73,7 +73,7 @@ async function initializeState() {
       const initState = [
         ["random", "Random!", true, false],
         ["general", "interesting things", true, false],
-        ["private", "some very private channel", true, true],
+        // ["private", "some very private channel", true, true],
       ];
 
       const query = `
@@ -464,26 +464,9 @@ io.on("connection", (socket) => {
 
       if (!room.direct && !room.private) {
         room = await addUserToRoom(user, room);
+
         const roomCID = "room" + room.id;
         socket.join(roomCID);
-
-        // 🔐 Send all existing members' public keys to joining user
-        const memberUsernames = await Rooms.getRoomMembers(room.id);
-        const publicKeys = {};
-        for (const member of memberUsernames) {
-          const memberUser = await Users.getUserByName(member);
-          if (memberUser) {
-            publicKeys[member] = memberUser.public_key;
-          }
-        }
-        socket.emit("receive_public_keys", publicKeys);
-
-        // 📣 Send the new user's public key to others in the room
-        const publicKeyEvent = {
-          username: user.name,
-          publicKey: user.public_key,
-        };
-        sendToRoom(room, "new_public_key", publicKeyEvent);
 
         socket.emit("update_room", {
           room: room,
@@ -492,10 +475,9 @@ io.on("connection", (socket) => {
       }
     }
   });
-
   socket.on("add_user_to_channel", async (req) => {
     if (userLoggedIn) {
-      const user = await Users.getUserByName(req.user);
+      const user = await Users.getUserByName(req.user); // The user being added
       let room = await Rooms.getRoom(req.channel);
 
       if (!room.direct) {
@@ -504,6 +486,26 @@ io.on("connection", (socket) => {
         if (socketmap[user.name]) {
           const roomCID = "room" + room.id;
           socketmap[user.name].join(roomCID);
+
+          // ✅ Fetch and send all public keys of current members
+          const memberUsernames = await Rooms.getRoomMembers(room.id);
+          const publicKeys = {};
+          for (const member of memberUsernames) {
+            const memberUser = await Users.getUserByName(member);
+            if (memberUser) {
+              publicKeys[member] = memberUser.public_key;
+            }
+          }
+
+          // ✅ Send all existing keys to the added user
+          socketmap[user.name].emit("receive_public_keys", publicKeys);
+
+          // ✅ Broadcast added user's key to other members
+          const publicKeyEvent = {
+            username: user.name,
+            publicKey: user.public_key,
+          };
+          sendToRoom(room, "new_public_key", publicKeyEvent);
 
           socketmap[user.name].emit("update_room", {
             room: room,

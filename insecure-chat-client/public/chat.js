@@ -241,7 +241,7 @@ function load(userdata) {
             } catch (err) {
               console.error(`Failed to encrypt for ${member}:`, err);
             }
-          }
+          } else console.log("Didnt encrypt for member:", member);
         });
 
         msgPayload = {
@@ -454,7 +454,7 @@ function load(userdata) {
       if (!publicKeyMap[user]) {
         console.log("Added new public key for:", user);
         publicKeyMap[user] = key;
-      }
+      } else console.log("Received key but already had it from user:", user);
     }
   });
 

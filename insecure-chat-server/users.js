@@ -1,7 +1,6 @@
 module.exports = (pool) => ({
   getUserByName: async (name) => {
     const res = await pool.query("SELECT * FROM users WHERE name = $1", [name]);
-    console.log("Getting user by name", name, "Found: ", res.rows[0]);
     return res.rows[0] || null;
   },
 
@@ -43,7 +42,6 @@ module.exports = (pool) => ({
       `INSERT INTO subscriptions (user_id, room_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`,
       [userId, roomId]
     );
-    console.log("Added a subscription for:", userId, "to: ", roomId);
   },
   removeSubscription: async (userId, roomId) => {
     await pool.query(
