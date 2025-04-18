@@ -19,18 +19,7 @@ const JWT_EXPIRY = "30m";
 app.use(cookieParser());
 
 app.use(express.json());
-app.use(
-  helmet.contentSecurityPolicy({
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:"],
-      connectSrc: ["'self'", "wss://localhost:3000"],
-      objectSrc: ["'none'"],
-    },
-  })
-);
+app.use(helmet());
 
 // C:\Users\BRYAN\AppData\Local\mkcert
 const authLimiter = rateLimit({
