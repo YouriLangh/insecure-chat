@@ -457,7 +457,9 @@ function load(userdata) {
   socket.on("user_state_change", (data) => {
     updateUser(data.username, data.active);
   });
-
+  socket.on("rate_error", (msg) => {
+    console.log(msg);
+  });
   socket.on("receive_public_keys", (keys) => {
     for (const [user, key] of Object.entries(keys)) {
       if (!publicKeyMap[user]) {
@@ -470,9 +472,6 @@ function load(userdata) {
   socket.on("update_room", (data) => {
     updateRoom(data.room);
     if (data.moveto) setRoom(data.room.id);
-    // if (data.room.private || data.room.direct) {
-    //   console.log("I update the public key map", data);
-    // }
   });
 
   socket.on("remove_room", (data) => {
@@ -502,25 +501,5 @@ function load(userdata) {
 
   socket.on("reconnect_error", () => {
     console.log("reconnect_error");
-  });
-  window.addEventListener("DOMContentLoaded", () => {
-    const leaveBtn = document.getElementById("leave-channel-btn");
-    const createBtn = document.getElementById("create-channel-btn");
-
-    if (leaveBtn) {
-      leaveBtn.addEventListener("click", () => {
-        if (typeof leaveChannel === "function") {
-          leaveChannel();
-        }
-      });
-    }
-
-    if (createBtn) {
-      createBtn.addEventListener("click", () => {
-        if (typeof addChannel === "function") {
-          addChannel();
-        }
-      });
-    }
   });
 }

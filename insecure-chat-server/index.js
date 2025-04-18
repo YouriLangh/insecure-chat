@@ -11,10 +11,12 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const cookie = require("cookie");
+const IOrateLimit = require("./rateLimiter");
 
 const JWT_SECRET = "your_very_secure_secret"; // put in env later
 const JWT_EXPIRY = "30m";
+const RATE_LIMIT_NR_LIMIT = 20;
+const RATE_LIMIT_TIME_THRESHOLD = 10 * 1000; // 10 seconds
 
 app.use(cookieParser());
 
@@ -409,6 +411,11 @@ io.on("connection", (socket) => {
   ///////////////////////
 
   socket.on("new message", async (msg) => {
+    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+      console.log("Rate limit exceeded for messaging", socket.user.name);
+      return socket.emit("rate_error", "Rate limit exceeded");
+    }
+
     if (userLoggedIn) {
       console.log(msg);
       await addMessageToRoom(msg.room, username, msg);
@@ -420,6 +427,13 @@ io.on("connection", (socket) => {
   /////////////////////////////
 
   socket.on("request_direct_room", async (req) => {
+    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+      console.log(
+        "Rate limit exceeded for direct room requests",
+        socket.user.name
+      );
+      return socket.emit("rate_error", "Rate limit exceeded");
+    }
     if (userLoggedIn) {
       const user_a = await Users.getUserByName(req.to);
       const user_b = await Users.getUserByName(username);
@@ -435,28 +449,15 @@ io.on("connection", (socket) => {
           room: room,
           moveto: true,
         });
-
-        // // 🔐 Share both users' public keys
-        // const keysToSend = {};
-        // keysToSend[user_a.name] = user_a.public_key;
-        // keysToSend[user_b.name] = user_b.public_key;
-
-        // // Send keys to both clients
-        // socket.emit("receive_public_keys", keysToSend);
-        // if (socketmap[user_a.name]) {
-        //   socketmap[user_a.name].emit("receive_public_keys", keysToSend);
-        // }
-
-        // // Also broadcast the new user's key to the room (safety net)
-        // sendToRoom(room, "new_public_key", {
-        //   username: user_b.name,
-        //   publicKey: user_b.public_key,
-        // });
       }
     }
   });
 
   socket.on("add_channel", async (req) => {
+    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+      console.log("Rate limit exceeded for adding channels", socket.user.name);
+      return socket.emit("rate_error", "Rate limit exceeded");
+    }
     if (userLoggedIn) {
       const user = await Users.getUserByName(username);
       console.log(req);
@@ -485,6 +486,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join_channel", async (req) => {
+    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+      console.log("Switching channels too fast!", socket.user.name);
+      return socket.emit("rate_error", "Rate limit exceeded");
+    }
     if (userLoggedIn) {
       const user = await Users.getUserByName(username);
       let room = await Rooms.getRoom(req.id);
@@ -503,6 +508,10 @@ io.on("connection", (socket) => {
     }
   });
   socket.on("add_user_to_channel", async (req) => {
+    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+      console.log("Adding too many users to channels!", socket.user.name);
+      return socket.emit("rate_error", "Rate limit exceeded");
+    }
     if (userLoggedIn) {
       const user = await Users.getUserByName(req.user); // The user being added
       let room = await Rooms.getRoom(req.channel);
@@ -513,37 +522,16 @@ io.on("connection", (socket) => {
         if (socketmap[user.name]) {
           const roomCID = "room" + room.id;
           socketmap[user.name].join(roomCID);
-
-          //       // ✅ Fetch and send all public keys of current members
-          //       const memberUsernames = await Rooms.getRoomMembers(room.id);
-          //       const publicKeys = {};
-          //       for (const member of memberUsernames) {
-          //         const memberUser = await Users.getUserByName(member);
-          //         if (memberUser) {
-          //           publicKeys[member] = memberUser.public_key;
-          //         }
-          //       }
-
-          //       // ✅ Send all existing keys to the added user
-          //       socketmap[user.name].emit("receive_public_keys", publicKeys);
-
-          //       // ✅ Broadcast added user's key to other members
-          //       const publicKeyEvent = {
-          //         username: user.name,
-          //         publicKey: user.public_key,
-          //       };
-          //       sendToRoom(room, "new_public_key", publicKeyEvent);
-
-          //       socketmap[user.name].emit("update_room", {
-          //         room: room,
-          //         moveto: false,
-          //       });
         }
       }
     }
   });
 
   socket.on("leave_channel", async (req) => {
+    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+      console.log("Leaving channels too quickly!", socket.user.name);
+      return socket.emit("rate_error", "Rate limit exceeded");
+    }
     if (userLoggedIn) {
       const user = await Users.getUserByName(username);
       const room = await Rooms.getRoom(req.id);
@@ -613,6 +601,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", async () => {
     console.log("Disconnecting the user...");
+    IOrateLimit.clear(socket.id);
     if (userLoggedIn) await setUserActiveState(socket, username, false);
   });
 });

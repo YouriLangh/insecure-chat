@@ -72,6 +72,9 @@ Added JWT auth for every HTTP req (no valuable routes anyways, so not implemente
 Added JWT at the start of WS connection to verify user.
 JWT is implemented with samesite & httpsonly
 
+Step 20:
+Rate limiting IO. 20actions / 10s
+
 Solved:
 nr of members in a channel is wrnog (maybe only newly created one?)
 Users show as online eventhough they aren't. ==> Might be a bug?? Not logging them out perhaps all the time.
