@@ -109,6 +109,7 @@ const options = {
   key: fs.readFileSync(path.join(__dirname, "certs", "localhost-key.pem")),
   cert: fs.readFileSync(path.join(__dirname, "certs", "localhost.pem")),
   ca: fs.readFileSync(path.join(__dirname, "certs", "rootCA.pem")),
+  minVersion: "TLSv1.2",
 };
 const server = https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS server running at https://localhost:${port}`);

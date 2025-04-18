@@ -26,8 +26,9 @@ pg (node-postgres) is used to safely prepare and bind parameters.
 Step 6:
 Sanitizing inputs on teh server side (to prevent MiTM) attacks
 
-Step 7: Using helmet as a middleware
-to ensure CSP( no XSS) & HTTPS & no TLS downgrade( HSTS is done by default by helmet (180 days))
+Step 7: Using helmet as a middleware on server side (not rlly needed as we dont serve any content from server), but still need to enfoce min version of tls
+Other than that we only listen on HTTPs so we cant see on HTTP [ & HTTPS & no TLS downgrade( HSTS is done by default by helmet (180 days))]
+On client: to ensure CSP( no XSS).
 
 Step 8:
 Added rate limiting on login path to ensure people cannot spam attempts
