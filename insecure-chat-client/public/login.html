@@ -9,38 +9,17 @@
       rel="stylesheet"
       href="../node_modules/bootstrap/dist/css/bootstrap.min.css"
     />
-
-    <script type="text/javascript">
-      let ipcRenderer = require("electron").ipcRenderer;
-      function toggleAuth(mode) {
-        document.getElementById("login-section").style.display =
-          mode === "login" ? "block" : "none";
-        document.getElementById("signup-section").style.display =
-          mode === "signup" ? "block" : "none";
-        document.getElementById("signupUserName").value =
-          mode === "login"
-            ? ""
-            : document.getElementById("signupUserName").value;
-        document.getElementById("signupPassword").value =
-          mode === "login"
-            ? ""
-            : document.getElementById("signupPassword").value;
-      }
-      function login() {
-        const userName = document.getElementById("loginUserName").value;
-        const password = document.getElementById("loginPassword").value;
-        ipcRenderer.send("login", { name: userName, password: password });
-      }
-      function signup() {
-        const userName = document.getElementById("signupUserName").value;
-        const password = document.getElementById("signupPassword").value;
-        ipcRenderer.send("register", { name: userName, password: password });
-      }
-      // Listen for success from main process
-      ipcRenderer.on("registration-success", () => {
-        toggleAuth("login");
-      });
-    </script>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  connect-src 'self' wss://localhost:3000;
+  object-src 'none';
+"
+    />
   </head>
 
   <body>
@@ -64,10 +43,10 @@
             placeholder="Enter password"
           />
         </div>
-        <button class="btn btn-primary" onclick="login()">Login</button>
+        <button class="btn btn-primary">Login</button>
         <p>
           Don't have an account?
-          <a href="#" onclick="toggleAuth('signup')">Sign up</a>
+          <a href="#">Sign up</a>
         </p>
       </div>
 
@@ -89,14 +68,13 @@
             placeholder="Choose a password"
           />
         </div>
-        <button class="btn btn-success" onclick="signup()">
-          Create Account
-        </button>
+        <button class="btn btn-success">Create Account</button>
         <p>
           Already have an account?
-          <a href="#" onclick="toggleAuth('login')">Log in</a>
+          <a href="#">Log in</a>
         </p>
       </div>
     </div>
+    <script src="./login.js"></script>
   </body>
 </html>

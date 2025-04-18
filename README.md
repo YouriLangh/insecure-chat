@@ -27,7 +27,7 @@ Step 6:
 Sanitizing inputs on teh server side (to prevent MiTM) attacks
 
 Step 7: Using helmet as a middleware
-to ensure CSP & HTTPs n such
+to ensure CSP( no XSS) & HTTPS & no TLS downgrade( HSTS is done by default by helmet (180 days))
 
 Step 8:
 Added rate limiting on login path to ensure people cannot spam attempts
@@ -63,7 +63,13 @@ Added E2EE, with a new symm key per msg. To do this i have to get all the public
 This means that everytime a user joins, their key is added to the map
 (deletion not yet implemented)
 
+Step 18:
 When going into a room, fetch the old messages by joining on the message keys and then decrypt if its a direct or private room.
+
+Step 19:
+Added JWT auth for every HTTP req (no valuable routes anyways, so not implemented)
+Added JWT at the start of WS connection to verify user.
+JWT is implemented with samesite & httpsonly
 Solved:
 nr of members in a channel is wrnog (maybe only newly created one?)
 Users show as online eventhough they aren't. ==> Might be a bug?? Not logging them out perhaps all the time.
@@ -76,18 +82,19 @@ Generate key per registration, can be used for DoS attacks, but its mostly clien
 
 Next steps:
 
-If u go into a channel & fetch the messages, have to fetch the keys of each message too.
-==> You dont?
+add maximum length to all inputs. (client side)
+Sanitize on server side for every request. ==> Should be fine tbh. (limit on input or so idk)
 
-Noone ever logs out...
-
-add maximum length to all inputs.
 look into socket.io-rate-limiter
+
 Enable certificate verification for HTTPS. (NEED TO FIX!!!!) Send mail to Jim.
 
-Sanitize on server side for every request. ==> Should be fine tbh.
-JWT & session management.
-Perhaps helmet for secure headers and CSP !!!!! ==> Not too sure if i am forcing these things yet
-Enforce HTTPS on server side?? Helmet can do this i think
-
 add openid
+
+Threat | Protection Strategy
+Session Hijacking | HTTPS only, Secure+HttpOnly cookies, short-lived tokens, no localStorage
+CSRF | Use SameSite cookies or JWT in headers, avoid storing tokens in cookies if possible
+TLS Downgrade | HSTS header, disable HTTP, block old TLS versions
+Session Fixation | Regenerate tokens/sessions on login
+XSS / Code Injection | CSP headers, escape/sanitize input, Helmet
+MITM | HTTPS/WSS, client pinning (optional), no mixed content

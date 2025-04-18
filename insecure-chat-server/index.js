@@ -9,14 +9,33 @@ const { Pool } = require("pg");
 const sanitizeHtml = require("sanitize-html");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const cookie = require("cookie");
+
+const JWT_SECRET = "your_very_secure_secret"; // put in env later
+const JWT_EXPIRY = "30m";
+
+app.use(cookieParser());
 
 app.use(express.json());
-app.use(helmet());
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "wss://localhost:3000"],
+      objectSrc: ["'none'"],
+    },
+  })
+);
 
 // C:\Users\BRYAN\AppData\Local\mkcert
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 100, // limit to 10 requests per 15 min per IP
+  max: 100, // limit to 100 requests per 15 min per IP (just for testing)
   message: "Too many attempts. Try again later.",
 });
 
@@ -107,6 +126,23 @@ const server = https.createServer(options, app).listen(port, () => {
 });
 
 const io = require("socket.io")(server);
+// Parse jwt tokens for sockets
+io.use((socket, next) => {
+  try {
+    const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+    const token = cookies.token;
+    console.log("token: ", token);
+    if (!token) return next(new Error("Authentication error"));
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) return next(new Error("Authentication failed"));
+      socket.user = user; // pass along user data
+      next();
+    });
+  } catch (err) {
+    return next(new Error("Auth parse error"));
+  }
+});
 
 app.post("/register", authLimiter, async (req, res) => {
   const { name, password, publicKey } = req.body;
@@ -210,6 +246,16 @@ app.post("/login", authLimiter, async (req, res) => {
     if (!samePwd) {
       return res.status(400).send("Incorrect credentials");
     }
+    const token = jwt.sign({ name: cleanName }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRY,
+    });
+
+    res.cookie("token", token, {
+      httpOnly: true, // No JS spoofing possible
+      secure: true, // only send over HTTPS
+      sameSite: "Strict", // prevent CSRF
+      maxAge: 60 * 60 * 1000, // 1 hour
+    });
 
     // User is authenticated successfully
     res.send("Login successful");
@@ -539,7 +585,8 @@ io.on("connection", (socket) => {
   ///////////////
   socket.on("join", async (p_username) => {
     if (userLoggedIn) return;
-    username = p_username;
+    username = socket.user.name;
+    console.log("username: ", username);
     userLoggedIn = true;
     socketmap[username] = socket;
     const user = await Users.getUserByName(username);

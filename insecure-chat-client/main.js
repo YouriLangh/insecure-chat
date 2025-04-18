@@ -94,6 +94,7 @@ ipcMain.on("login", function (event, data) {
         name: cleanName,
         password: pwd,
       }),
+      credentials: "include",
     })
       .then((res) => {
         if (!res.ok) {

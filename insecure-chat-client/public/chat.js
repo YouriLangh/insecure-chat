@@ -5,6 +5,8 @@ const crypto = require("crypto");
 const SERVER = "localhost";
 const PORT = 3000;
 
+const $ = require("jquery");
+
 $(function () {
   // Get user data
   electron.ipcRenderer.send("get-user-data");
@@ -497,5 +499,25 @@ function load(userdata) {
 
   socket.on("reconnect_error", () => {
     console.log("reconnect_error");
+  });
+  window.addEventListener("DOMContentLoaded", () => {
+    const leaveBtn = document.getElementById("leave-channel-btn");
+    const createBtn = document.getElementById("create-channel-btn");
+
+    if (leaveBtn) {
+      leaveBtn.addEventListener("click", () => {
+        if (typeof leaveChannel === "function") {
+          leaveChannel();
+        }
+      });
+    }
+
+    if (createBtn) {
+      createBtn.addEventListener("click", () => {
+        if (typeof addChannel === "function") {
+          addChannel();
+        }
+      });
+    }
   });
 }
