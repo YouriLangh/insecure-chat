@@ -109,7 +109,8 @@ const options = {
   key: fs.readFileSync(path.join(__dirname, "certs", "localhost-key.pem")),
   cert: fs.readFileSync(path.join(__dirname, "certs", "localhost.pem")),
   ca: fs.readFileSync(path.join(__dirname, "certs", "rootCA.pem")),
-  minVersion: "TLSv1.2",
+  minVersion: "TLSv1.2", // Reject anything below TLS 1.2
+  maxVersion: "TLSv1.3", // Only allow TLS 1.2 and 1.3 Sourced from: https://stackoverflow.com/questions/44629256/configure-https-agent-to-allow-only-tls1-2-for-outgoing-requests on 18/04 By Youri Langhendries
 };
 const server = https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS server running at https://localhost:${port}`);
@@ -119,10 +120,9 @@ const io = require("socket.io")(server);
 // Parse jwt tokens for sockets
 io.use((socket, next) => {
   try {
-    const cookies = cookie.parse(socket.handshake.headers.cookie || "");
-    const token = cookies.token;
-    console.log("token: ", token);
-    if (!token) return next(new Error("Authentication error"));
+    const token = socket.handshake.headers.authorization || "";
+
+    if (!token) return next(new Error("Authentication error")); // If we dont receive a valid token, send a connection error to the client.
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (err) return next(new Error("Authentication failed"));
@@ -239,16 +239,7 @@ app.post("/login", authLimiter, async (req, res) => {
     const token = jwt.sign({ name: cleanName }, JWT_SECRET, {
       expiresIn: JWT_EXPIRY,
     });
-
-    res.cookie("token", token, {
-      httpOnly: true, // No JS spoofing possible
-      secure: true, // only send over HTTPS
-      sameSite: "Strict", // prevent CSRF
-      maxAge: 60 * 60 * 1000, // 1 hour
-    });
-
-    // User is authenticated successfully
-    res.send("Login successful");
+    res.json({ token });
   } catch (error) {
     console.error("Login failed:", error);
     res.status(500).send("Login error");

@@ -61,6 +61,7 @@ app.whenReady().then(() => {
 let userData = {
   name: false,
   privateKey: false,
+  token: false,
 };
 // Regex to enforce just characters in a name
 
@@ -94,7 +95,6 @@ ipcMain.on("login", function (event, data) {
         name: cleanName,
         password: pwd,
       }),
-      credentials: "include",
     })
       .then((res) => {
         if (!res.ok) {
@@ -104,10 +104,12 @@ ipcMain.on("login", function (event, data) {
             );
           });
         }
-        return res.text();
+        return res.json();
       })
       .then((data) => {
         userData.name = cleanName;
+        userData.token = data.token; // Store JWT
+        console.log("data: ", data);
         const allKeys = loadAllStoredKeys();
         const storedKey = allKeys[cleanName];
 
@@ -116,6 +118,7 @@ ipcMain.on("login", function (event, data) {
         } else {
           console.error(`No stored key found for ${cleanName}`);
         }
+
         openChat(BrowserWindow.getAllWindows()[0], data);
         event.reply("registration-success");
       })

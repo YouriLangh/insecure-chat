@@ -13,7 +13,7 @@
       http-equiv="Content-Security-Policy"
       content="
 default-src 'self';
-script-src 'self';
+script-src 'self' 'unsafe-inline';
 style-src 'self' 'unsafe-inline';
 img-src 'self' data:;
 connect-src 'self' wss://localhost:3000;
@@ -66,9 +66,9 @@ object-src 'none';
           >
           <a
             href="#"
-            id="leave-channel-btn"
             style="float: Right"
             class="roomAction btn btn-outline-danger btn-sm"
+            onclick="leaveChannel();"
             >Leave channel</a
           >
 
@@ -159,7 +159,7 @@ object-src 'none';
               type="button"
               class="btn btn-primary"
               data-bs-dismiss="modal"
-              id="create-channel-btn"
+              onclick="addChannel();"
             >
               Create
             </button>
@@ -226,9 +226,9 @@ object-src 'none';
 
     <script src="../node_modules/jquery/dist/jquery.min.js"></script>
 
-    <!-- <script>
+    <script>
       window.jQuery = window.$ = require("jquery");
-    </script> -->
+    </script>
 
     <script src="../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 

@@ -37,6 +37,9 @@ function load(userdata) {
     transports: ["websocket"],
     secure: true,
     rejectUnauthorized: false,
+    extraHeaders: {
+      Authorization: userdata.token,
+    },
     // ca,
   });
 
