@@ -10,15 +10,13 @@ const sanitizeHtml = require("sanitize-html");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser");
+// const cookieParser = require("cookie-parser");
 const IOrateLimit = require("./rateLimiter");
 
 const JWT_SECRET = "your_very_secure_secret"; // put in env later
 const JWT_EXPIRY = "30m";
 const RATE_LIMIT_NR_LIMIT = 20;
 const RATE_LIMIT_TIME_THRESHOLD = 10 * 1000; // 10 seconds
-
-app.use(cookieParser());
 
 app.use(express.json());
 app.use(helmet());
