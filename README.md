@@ -83,7 +83,7 @@ Ensure regex's cant be the cause of DoS attacks
 
 Syep 17:
 Added E2EE, with a new symm key per msg. To do this i have to get all the public keys of all user, and then we keep a map of the username - key.
-This means that everytime a user joins, their key is added to the map
+This means that everytime a user joins, their key is added to the map. Each client owns all public keys & their own private key
 (deletion not yet implemented)
 
 Step 18:

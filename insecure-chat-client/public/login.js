@@ -25,11 +25,9 @@ function signup() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  // Bind login/signup buttons
   document.querySelector(".btn-primary").addEventListener("click", login);
   document.querySelector(".btn-success").addEventListener("click", signup);
 
-  // Bind text links
   const signupLink = document.getElementById("show-signup");
   const loginLink = document.getElementById("show-login");
 

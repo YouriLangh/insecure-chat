@@ -108,7 +108,6 @@ function load(userdata) {
     if (index !== -1) {
       rooms[index] = room;
     } else {
-      // old code:
       rooms.push(room);
     }
     updateRoomList();
@@ -274,13 +273,13 @@ function load(userdata) {
       hour: "numeric",
       minute: "numeric",
     });
-    console.log("Adding encrypted message:", msg);
     let decryptedMessage = "[Could not decrypt]";
     // Step 1: Decrypt AES key with user's private RSA key
     try {
       const encryptedAESKey = Buffer.from(msg.keys[username], "base64");
-      if (!encryptedAESKey) return; // If the user wasn't part of the channel when the messages were sent, dont attempt to decrypt as he does not have acces
+      if (!encryptedAESKey) return; // If the user wasn't part of the channel when the messages were sent, dont attempt to decrypt as he does not have access
       // to the old symmetric key.
+
       const privateKey = userdata.privateKey;
 
       const aesKey = crypto.privateDecrypt(privateKey, encryptedAESKey);
@@ -296,10 +295,7 @@ function load(userdata) {
       console.error("Decryption failed:", err);
     }
     // Step 3: Sanitize and render
-    const cleanMessage = sanitizeHtml(decryptedMessage, {
-      allowedTags: [],
-      allowedAttributes: {},
-    });
+    const cleanMessage = sanitizeHtml(decryptedMessage);
 
     $messages.append(`
       <div class="message">
@@ -320,7 +316,6 @@ function load(userdata) {
       hour: "numeric",
       minute: "numeric",
     });
-    // Step 3: Sanitize and render
     const cleanMessage = sanitizeHtml(msg.message, {
       allowedTags: [],
       allowedAttributes: {},
@@ -410,7 +405,6 @@ function load(userdata) {
     updateUsers(data.users);
     updateRooms(data.rooms);
     updateChannels(data.publicChannels);
-    console.log("I logged in.");
     if (data.rooms.length > 0) {
       setRoom(data.rooms[0].id);
     }
@@ -418,8 +412,8 @@ function load(userdata) {
     }
   });
 
+  // When a new user logs in, the old users receive new keys via this event
   socket.on("new_public_key", (data) => {
-    console.log("Received public key for new member:", data.username);
     publicKeyMap[data.username] = data.publicKey;
   });
 
@@ -460,12 +454,12 @@ function load(userdata) {
   socket.on("rate_error", (msg) => {
     console.log(msg);
   });
+  // Only used when a user logs in for the first time
   socket.on("receive_public_keys", (keys) => {
     for (const [user, key] of Object.entries(keys)) {
       if (!publicKeyMap[user]) {
-        console.log("Added new public key for:", user);
         publicKeyMap[user] = key;
-      } else console.log("Received key but already had it from user:", user);
+      }
     }
   });
 
