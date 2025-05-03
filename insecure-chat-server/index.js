@@ -15,8 +15,6 @@ require("dotenv").config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const JWT_EXPIRY = process.env.JWT_EXPIRY || "30m";
-const RATE_LIMIT_NR_LIMIT = 20;
-const RATE_LIMIT_TIME_THRESHOLD = 10 * 1000; // 10 seconds
 
 app.use(express.json());
 app.use(helmet());
@@ -412,7 +410,7 @@ io.on("connection", (socket) => {
 
   socket.on("new message", async (msg) => {
     // Use rate limiting to prevent spamming
-    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+    if (!IOrateLimit(socket)) {
       console.log("Rate limit exceeded for messaging", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
@@ -428,7 +426,7 @@ io.on("connection", (socket) => {
 
   socket.on("request_direct_room", async (req) => {
     // Use rate limiting to prevent spamming
-    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+    if (!IOrateLimit(socket)) {
       console.log(
         "Rate limit exceeded for direct room requests",
         socket.user.name
@@ -456,7 +454,7 @@ io.on("connection", (socket) => {
 
   socket.on("add_channel", async (req) => {
     // Use rate limiting to prevent spamming
-    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+    if (!IOrateLimit(socket)) {
       return socket.emit("rate_error", "Rate limit exceeded");
     }
     if (userLoggedIn) {
@@ -487,7 +485,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("join_channel", async (req) => {
-    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+    if (!IOrateLimit(socket)) {
       console.log("Switching channels too fast!", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
@@ -509,7 +507,7 @@ io.on("connection", (socket) => {
     }
   });
   socket.on("add_user_to_channel", async (req) => {
-    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+    if (!IOrateLimit(socket)) {
       console.log("Adding too many users to channels!", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
@@ -529,7 +527,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("leave_channel", async (req) => {
-    if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
+    if (!IOrateLimit(socket)) {
       console.log("Leaving channels too quickly!", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
