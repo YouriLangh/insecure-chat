@@ -1,6 +1,7 @@
 const { ipcRenderer } = require("electron");
 
 function toggleAuth(mode) {
+  console.log(`Toggling auth mode to ${mode}`);
   document.getElementById("login-section").style.display =
     mode === "login" ? "block" : "none";
   document.getElementById("signup-section").style.display =
@@ -29,12 +30,19 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelector(".btn-success").addEventListener("click", signup);
 
   // Bind text links
-  const loginLink = document.querySelector("a[href='#']:not([onclick])");
-  const signupLink = document.querySelector("a[href='#'][onclick]");
+  const signupLink = document.getElementById("show-signup");
+  const loginLink = document.getElementById("show-login");
 
-  if (loginLink) loginLink.addEventListener("click", () => toggleAuth("login"));
   if (signupLink)
-    signupLink.addEventListener("click", () => toggleAuth("signup"));
+    signupLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      toggleAuth("signup");
+    });
+  if (loginLink)
+    loginLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      toggleAuth("login");
+    });
 });
 
 // Handle registration success

@@ -10,25 +10,22 @@ const sanitizeHtml = require("sanitize-html");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
-// const cookieParser = require("cookie-parser");
 const IOrateLimit = require("./rateLimiter");
+require("dotenv").config();
 
-const JWT_SECRET = "your_very_secure_secret"; // put in env later
-const JWT_EXPIRY = "30m";
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret"; // fallback for school
+const JWT_EXPIRY = process.env.JWT_EXPIRY || "30m";
 const RATE_LIMIT_NR_LIMIT = 20;
 const RATE_LIMIT_TIME_THRESHOLD = 10 * 1000; // 10 seconds
 
 app.use(express.json());
 app.use(helmet());
 
-// C:\Users\BRYAN\AppData\Local\mkcert
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 100, // limit to 100 requests per 15 min per IP (just for testing)
   message: "Too many attempts. Try again later.",
 });
-
-// require('dotenv').config();
 
 const bcrypt = require("bcrypt");
 // Database connection setup
@@ -81,7 +78,7 @@ async function initializeState() {
       const initState = [
         ["random", "Random!", true, false],
         ["general", "interesting things", true, false],
-        // ["private", "some very private channel", true, true],
+        ["private", "some very private channel", true, true],
       ];
 
       const query = `

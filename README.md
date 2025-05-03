@@ -1,5 +1,27 @@
 # insecure-chat
 
+### Run instructions
+
+I use a local database image of postgres, make sure docker desktop is running.
+
+```bash
+docker run --name some-postgres -e POSTGRES_PASSWORD=mysecretpassword -p 5431:5432 -d postgres
+```
+
+```bash
+cd insecure-chat-client
+npm install
+npm run start
+```
+
+```bash
+cd insecure-chat-server
+npm install
+npm start
+```
+
+### Steps performed to secure app
+
 Step 0:
 Ran npm audit fix to fix any vulnerabilities in the packages (server side)
 Step 1:
