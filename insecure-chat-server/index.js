@@ -13,7 +13,7 @@ const jwt = require("jsonwebtoken");
 const IOrateLimit = require("./rateLimiter");
 require("dotenv").config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret"; // fallback for school
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const JWT_EXPIRY = process.env.JWT_EXPIRY || "30m";
 const RATE_LIMIT_NR_LIMIT = 20;
 const RATE_LIMIT_TIME_THRESHOLD = 10 * 1000; // 10 seconds
@@ -23,7 +23,7 @@ app.use(helmet());
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 100, // limit to 100 requests per 15 min per IP (just for testing)
+  max: 100, // limit to 100 requests per 15 min per IP
   message: "Too many attempts. Try again later.",
 });
 
@@ -114,7 +114,7 @@ const server = https.createServer(options, app).listen(port, () => {
 });
 
 const io = require("socket.io")(server);
-// Parse jwt tokens for sockets
+// Parse JWT token during ws handshake, once approved users will not have to refresh their tokens
 io.use((socket, next) => {
   try {
     const token = socket.handshake.headers.authorization || "";
@@ -133,12 +133,15 @@ io.use((socket, next) => {
 
 app.post("/register", authLimiter, async (req, res) => {
   const { name, password, publicKey } = req.body;
+  // Enforce input length limits
   if (name.length > 100 || password.length > 100) {
     return res.status(400).send("Input too long");
   }
+  // Sanitize input, not really necessary.
   const cleanName = sanitizeHtml(name);
   const cleanPwd = sanitizeHtml(password);
 
+  // Check if the input contains only alphanumeric characters (and underscores)
   const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   if (!name || !password) {
@@ -158,7 +161,7 @@ app.post("/register", authLimiter, async (req, res) => {
       SELECT * FROM users WHERE name = $1;
     `;
 
-    const findUserResult = await pool.query(findUserQuery, [cleanName]); // Case sensitive!!
+    const findUserResult = await pool.query(findUserQuery, [cleanName]); // Case sensitive!! Needed as frontend UI uses the name we find.
 
     if (findUserResult.rows.length > 0) {
       return res.status(400).send("User already exists");
@@ -197,11 +200,14 @@ app.post("/register", authLimiter, async (req, res) => {
 
 app.post("/login", authLimiter, async (req, res) => {
   const { name, password } = req.body;
+  // Enforce input length limits
   if (name.length > 100 || password.length > 100) {
     return res.status(400).send("Input too long");
   }
+  // Sanitize input, not really necessary.
   const cleanName = sanitizeHtml(name);
   const cleanPwd = sanitizeHtml(password);
+  // Check if the input contains only alphanumeric characters (and underscores)
   const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   if (!name || !password) {
@@ -226,7 +232,7 @@ app.post("/login", authLimiter, async (req, res) => {
     if (findUserResult.rows.length === 0) {
       return res.status(400).send("No user exists by that username");
     }
-
+    // If user exists, check the password with the stored, hashed password
     const hashedUserPwd = findUserResult.rows[0].password;
     const samePwd = await bcrypt.compare(password, hashedUserPwd);
 
@@ -286,7 +292,6 @@ async function getDirectRoom(user_a, user_b) {
 
   if (rooms.length == 1) return rooms[0];
   else {
-    console.log("Have to add new direct room");
     return await newDirectRoom(user_a, user_b);
   }
 }
@@ -323,7 +328,6 @@ async function addMessageToRoom(roomId, username, msg) {
   msg.time = new Date().getTime();
   let basePayload;
   if (!room) return;
-  // Insert into messages table and get message ID
 
   if (room.private || room.direct) {
     basePayload = {
@@ -333,9 +337,10 @@ async function addMessageToRoom(roomId, username, msg) {
       time: msg.time,
       iv: msg.iv,
       direct: room.direct,
-      keys: msg.encryptedKeys, // { username: encryptedKey }
+      keys: msg.encryptedKeys,
     };
 
+    // Insert into messages table and get message ID
     const insertMsgQuery = `
     INSERT INTO messages (room_id, username, iv, message, time)
     VALUES ($1, $2, $3, $4, $5) RETURNING id
@@ -350,7 +355,7 @@ async function addMessageToRoom(roomId, username, msg) {
 
     const messageId = result.rows[0].id;
     // Insert encrypted AES keys per recipient
-    const encryptedKeys = basePayload.keys; // { username: encryptedKey }
+    const encryptedKeys = basePayload.keys;
 
     for (const [recipient, encryptedKey] of Object.entries(encryptedKeys)) {
       const insertKeyQuery = `
@@ -406,13 +411,13 @@ io.on("connection", (socket) => {
   ///////////////////////
 
   socket.on("new message", async (msg) => {
+    // Use rate limiting to prevent spamming
     if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
       console.log("Rate limit exceeded for messaging", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
 
     if (userLoggedIn) {
-      console.log(msg);
       await addMessageToRoom(msg.room, username, msg);
     }
   });
@@ -422,6 +427,7 @@ io.on("connection", (socket) => {
   /////////////////////////////
 
   socket.on("request_direct_room", async (req) => {
+    // Use rate limiting to prevent spamming
     if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
       console.log(
         "Rate limit exceeded for direct room requests",
@@ -449,8 +455,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("add_channel", async (req) => {
+    // Use rate limiting to prevent spamming
     if (!IOrateLimit(socket, RATE_LIMIT_NR_LIMIT, RATE_LIMIT_TIME_THRESHOLD)) {
-      console.log("Rate limit exceeded for adding channels", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
     if (userLoggedIn) {
@@ -550,34 +556,40 @@ io.on("connection", (socket) => {
   socket.on("join", async (p_username) => {
     if (userLoggedIn) return;
     username = socket.user.name;
-    console.log("username: ", username);
     userLoggedIn = true;
     socketmap[username] = socket;
     const user = await Users.getUserByName(username);
     const roomIds = await Users.getSubscriptions(user.id);
     const rooms = [];
+
     for (const roomId of roomIds) {
       const id = roomId.room_id;
       socket.join("room" + id);
       const room = await Rooms.getRoom(id);
       rooms.push(room);
     }
+
     const publicChannels = rooms.filter((r) => !r.direct && !r.private);
     const users = await Users.getUsers();
     const publicKeys = {};
+
     users.forEach((u) => {
       publicKeys[u.name] = u.public_key;
     });
+
     socket.emit("login", {
       users: users.map((u) => ({ username: u.name, active: u.active })),
       rooms,
       publicChannels,
     });
+
     socket.emit("receive_public_keys", publicKeys);
+
     const publicKeyEvent = {
       username: user.name,
       publicKey: user.public_key,
     };
+
     socket.broadcast.emit("new_public_key", publicKeyEvent);
     await setUserActiveState(socket, username, true);
   });

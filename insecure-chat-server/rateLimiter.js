@@ -1,4 +1,4 @@
-// rateLimiter.js
+// Use rate limiting to prevent spamming. All actions are counted towards the limit. (sending a message, joining a room, etc.)
 const rateLimitMap = new Map();
 
 function IOrateLimit(socket, limit = 10, interval = 10000) {

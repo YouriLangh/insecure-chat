@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     direct BOOLEAN DEFAULT FALSE
 );
 
--- Create User-Rooms Relationship Table (Many-to-Many)
+-- Create User-Rooms Relationship Table
 CREATE TABLE IF NOT EXISTS user_rooms (
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,

@@ -95,7 +95,7 @@ Added JWT at the start of WS connection to verify user.
 JWT is implemented with samesite & httpsonly
 
 Step 20:
-Rate limiting IO. 20actions / 10s
+Rate limiting IO. 20actions / 10s, Its a different limiter per action
 
 Solved:
 nr of members in a channel is wrnog (maybe only newly created one?)
