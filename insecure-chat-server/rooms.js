@@ -43,6 +43,7 @@ module.exports = (pool) => {
   return {
     getRoomMembers,
     getRoomMessages,
+    // Replaced all room functions with database equivalents
 
     // Add a room
     addRoom: async (name, options = {}) => {

@@ -11,6 +11,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
 const IOrateLimit = require("./rateLimiter");
+const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
@@ -19,14 +20,19 @@ const JWT_EXPIRY = process.env.JWT_EXPIRY || "30m";
 app.use(express.json());
 app.use(helmet());
 
+/**
+ * Rate limiting middleware for authentication routes (register/login).
+ */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 100, // limit to 100 requests per 15 min per IP
+  max: 10, // limit to 10 requests per 15 min per IP
   message: "Too many attempts. Try again later.",
 });
 
-const bcrypt = require("bcrypt");
-// Database connection setup
+/**
+ * Database connection setup
+ * The environment variables are the same as the defaults.
+ */
 const pool = new Pool({
   user: process.env.DB_USER || "postgres",
   host: process.env.DB_HOST || "localhost",
@@ -37,6 +43,10 @@ const pool = new Pool({
 
 const Rooms = require("./rooms.js")(pool);
 const Users = require("./users.js")(pool);
+
+/**
+ * Run migrations to populate the database with the schema.
+ */
 async function runMigrations() {
   try {
     const migrationFile = path.join(__dirname, "init.sql");
@@ -53,7 +63,6 @@ async function runMigrations() {
     } finally {
       client.release();
     }
-
     console.log("Connected to the database successfully!");
   } catch (err) {
     console.error(
@@ -63,6 +72,9 @@ async function runMigrations() {
   }
 }
 
+/**
+ * Initialize the database with the forced rooms (similar to basicstate.js)
+ */
 async function initializeState() {
   // Check if the rooms table already contains any rows
   const checkQuery = "SELECT COUNT(*) FROM rooms";
@@ -99,6 +111,7 @@ async function initializeState() {
 }
 
 runMigrations();
+
 // Read certs
 const options = {
   key: fs.readFileSync(path.join(__dirname, "certs", "localhost-key.pem")),
@@ -107,12 +120,14 @@ const options = {
   minVersion: "TLSv1.2", // Reject anything below TLS 1.2
   maxVersion: "TLSv1.3", // Only allow TLS 1.2 and 1.3 Sourced from: https://stackoverflow.com/questions/44629256/configure-https-agent-to-allow-only-tls1-2-for-outgoing-requests on 18/04 By Youri Langhendries
 };
+
 const server = https.createServer(options, app).listen(port, () => {
   console.log(`HTTPS server running at https://localhost:${port}`);
 });
 
 const io = require("socket.io")(server);
-// Parse JWT token during ws handshake, once approved users will not have to refresh their tokens
+
+// Parse JWT token during ws handshake, once approved users will not have to refresh their tokens (even if they expire)
 io.use((socket, next) => {
   try {
     const token = socket.handshake.headers.authorization || "";
@@ -129,6 +144,15 @@ io.use((socket, next) => {
   }
 });
 
+/**
+ * Registration route:
+ * - Checks if the input is valid & not too long
+ * - Checks if the user already exists
+ * - Hashes the password
+ * - Inserts the new user into the database (does not need to store the salt as the hash already contains it)
+ * - Adds the user to forced rooms
+ *
+ */
 app.post("/register", authLimiter, async (req, res) => {
   const { name, password, publicKey } = req.body;
   // Enforce input length limits
@@ -184,6 +208,7 @@ app.post("/register", authLimiter, async (req, res) => {
       `SELECT id FROM rooms WHERE force_membership = true`
     );
     const forcedRooms = forcedRoomsRes.rows;
+
     // Add user to each forced room
     for (const room of forcedRooms) {
       let aa = await addUserToRoom(result.rows[0], room);
@@ -196,6 +221,14 @@ app.post("/register", authLimiter, async (req, res) => {
   }
 });
 
+/**
+ * Login route:
+ * - Checks if the input is valid & not too long
+ * - Checks if the user exists
+ * - Checks the password with the stored, hashed password
+ * - Generates a JWT token
+ * - Sends the token back to the client
+ */
 app.post("/login", authLimiter, async (req, res) => {
   const { name, password } = req.body;
   // Enforce input length limits
@@ -321,6 +354,15 @@ async function removeUserFromRoom(user, room) {
   });
 }
 
+/**
+ * Add a message to a room
+ * - If the room is private or direct, encrypt the message and store it in the database
+ * - If the room is public, store the message in the database
+ * - Send the message to the room
+ * - If the room is private or direct, send the encrypted keys to the recipients
+ * Note: All users in the room will receive the encrypted symmetric keys of all the other users in the room.
+ * This is not a security issue, as the keys are encrypted with the recipient's public key. This is moreso a communication overhead.
+ */
 async function addMessageToRoom(roomId, username, msg) {
   const room = await Rooms.getRoom(roomId);
   msg.time = new Date().getTime();
@@ -355,6 +397,7 @@ async function addMessageToRoom(roomId, username, msg) {
     // Insert encrypted AES keys per recipient
     const encryptedKeys = basePayload.keys;
 
+    // Iterate over the encrypted keys and insert them into the message_keys table, this way we can retrieve the messages later on and decrypt them
     for (const [recipient, encryptedKey] of Object.entries(encryptedKeys)) {
       const insertKeyQuery = `
       INSERT INTO message_keys (message_id, recipient, encrypted_key)
@@ -569,6 +612,8 @@ io.on("connection", (socket) => {
 
     const publicChannels = rooms.filter((r) => !r.direct && !r.private);
     const users = await Users.getUsers();
+
+    // To ensure E2EE, we have to fetch the public keys of all users
     const publicKeys = {};
 
     users.forEach((u) => {
@@ -580,14 +625,14 @@ io.on("connection", (socket) => {
       rooms,
       publicChannels,
     });
-
+    // When logging in, the public keys for all users are sent to the client.
     socket.emit("receive_public_keys", publicKeys);
 
     const publicKeyEvent = {
       username: user.name,
       publicKey: user.public_key,
     };
-
+    // Send the public key of the newly logged in user to all other users
     socket.broadcast.emit("new_public_key", publicKeyEvent);
     await setUserActiveState(socket, username, true);
   });

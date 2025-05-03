@@ -1,4 +1,6 @@
 module.exports = (pool) => ({
+  // Replaced all user functions with database equivalents
+
   getUserByName: async (name) => {
     const res = await pool.query("SELECT * FROM users WHERE name = $1", [name]);
     return res.rows[0] || null;

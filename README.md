@@ -1,12 +1,23 @@
-# insecure-chat
+# Chat platform with end-to-end encryption
 
-### Run instructions
+The purpose of this project is to create a secure chat platform similar to Slack, which allows users to communicate messages in channels or as private messages.
+This project is made for the class _Security in Computing_ 2024-2025.
 
-I use a local database image of postgres, make sure docker desktop is running.
+## Project Setup Instructions
+
+### 1. Start the PostgreSQL Container
+
+No dotenv is needed as the default values are the same as the ones in the .env. Additionally, any database migrations database will happen automatically.
+
+Make sure **Docker Desktop is running**, then start the container with:
 
 ```bash
 docker run --name some-postgres -e POSTGRES_PASSWORD=mysecretpassword -p 5431:5432 -d postgres
 ```
+
+### 2. Start the Client
+
+Navigate to the client folder, install dependencies, and run the development server:
 
 ```bash
 cd insecure-chat-client
@@ -14,108 +25,159 @@ npm install
 npm run start
 ```
 
+### 3. Start the Server
+
+In a separate terminal, navigate to the server folder, install dependencies, and start the backend:
+
 ```bash
 cd insecure-chat-server
 npm install
 npm start
 ```
 
-### Steps performed to secure app
+## 🔐 Steps Taken to Secure the Application
 
-Step 0:
-Ran npm audit fix to fix any vulnerabilities in the packages (server side)
-Step 1:
-Started by sanitizing the login input with sanitize-html, and then an additional regex to ensure only characters/numbers were used
+### Step 0: Fixing Package Vulnerabilities
 
-Step 2:
-Added password fields and a register form to ensure users are unique & authenticated correctly
+- Ran `npm audit fix` on the server & client to resolve known vulnerabilities in dependencies.
 
-Step 3:
-Created a CA (using mkcert) on the local device to ensure HTTPS connection for safe transfer or login/register data to the server.
-(Perhaps still vulnerable from the local device)
-Run mkcert -CAROOT
-to make this work on localhost
+---
 
-Step 4:
-A simple DB is made in a container from the postgres image.
-Users are then added to the database, with encrypted passwords. (if no other user with that name exists) Salts dont need to be stored as bcrypt stores them in the hash itself.
-For logging in, we ensure a user exists and compared the plaintext pwd with the stored hash.
+### Step 1: Input Sanitization
 
-Step 5:
-Correctly parametrizing SQL queries:
-pg (node-postgres) is used to safely prepare and bind parameters.
+- Client-side: Sanitized login, registration, and any other user-generated inputs using `sanitize-html`.
+- Server-side: Added regex validation to allow only alphanumeric characters and underscores for registration & login. Ensure passwords & usernames for login/registration are limited size.
 
-Step 6:
-Sanitizing inputs on teh server side (to prevent MiTM) attacks
+---
 
-Step 7: Using helmet as a middleware on server side (not rlly needed as we dont serve any content from server), but still need to enfoce min version of tls
-Other than that we only listen on HTTPs so we cant see on HTTP [ & HTTPS & no TLS downgrade( HSTS is done by default by helmet (180 days))]
-On client: ensure CSP with a CSP tag, still allows for inline scripts but code was too hard to change (they generate dynamically in chat.js and fuck that) ( no XSS).
+### Step 2: User Authentication
 
-Step 8:
-Added rate limiting on login path to ensure people cannot spam attempts
+- Implemented an account system: password fields and a registration form.
+- Ensured usernames are unique and passwords are hashed using `bcrypt`.
 
-Step 9: (basically same as HTTPS)
-Switch to WSS as we are now operating on HTTPS
+---
 
-Step 10:
-Add sanitation on all possible inputs on client side.
+### Step 3: HTTPS via Local CA
 
-- Add channel (name and description)
-- Message
+- Created a local certificate authority using [`mkcert`](https://github.com/FiloSottile/mkcert) to serve the app over HTTPS.
+- Ran `mkcert -CAROOT` to configure trust on localhost.
 
-Step 11:
-Move to database
+> **Note:** Local devices may still be vulnerable if compromised & certificate verification had to be disabled to make this work.
 
-Step 12: Case insensitive checks for user registration / login ==> removed!!!
+---
 
-Step 13:
-Had to perform id -1 on frontend very often (all but once, as postgres starts on 1 for serials but with array indexing we needed 0)
+### Step 4: Secure Database Usage
 
-Step 14:
-Add authlimiter to register aswell to prevent dos on bcrypt as bcrypt is slow
+- Set up a PostgreSQL container using Docker.
+- Stored user credentials in the database with hashed passwords.
+- Relied on bcrypt's built-in salt handling.
+- Compared hashed passwords securely during login.
 
-Step 15:
-Limit inputs to X characters on register & login.
+---
 
-Step 16:
-Ensure regex's cant be the cause of DoS attacks
+### Step 5: Parameterized SQL Queries
 
-Syep 17:
-Added E2EE, with a new symm key per msg. To do this i have to get all the public keys of all user, and then we keep a map of the username - key.
-This means that everytime a user joins, their key is added to the map. Each client owns all public keys & their own private key
-(deletion not yet implemented)
+- Used `pg` (node-postgres) with parameterized queries to prevent SQL injection.
 
-Step 18:
-When going into a room, fetch the old messages by joining on the message keys and then decrypt if its a direct or private room.
+---
 
-Step 19:
-Added JWT auth for every HTTP req (no valuable routes anyways, so not implemented) (sent in body, safe vs WSHS)
-Added JWT at the start of WS connection to verify user.
-JWT is implemented with samesite & httpsonly
+### Step 6: Additional Server-Side Input Sanitization
 
-Step 20:
-Rate limiting IO. 20actions / 10s, Its a different limiter per action
+- Added _some_ extra input sanitization (`sanitize-html`) server-side to protect against tampering and injection.
 
-Solved:
-nr of members in a channel is wrnog (maybe only newly created one?)
-Users show as online eventhough they aren't. ==> Might be a bug?? Not logging them out perhaps all the time.
+> **Note:** Not really necessary.
 
-Array on client side is fucked due to ids and private channels.
-To recreate, have 2 clients open, have them both open a private channel. Then disconnect on B and try to navigate to that private channel. and try to click on some of the channels --> Undefined
-FIXED: frontend code used array indexing, now we use find to look for ids. ==> FIXED THEIR CODE XDD LMAO
+---
 
-Generate key per registration, can be used for DoS attacks, but its mostly client side. Otherwise cant make multiple accs from same terminal/process.
+### Step 7: Secure HTTP Headers
 
-Next steps:
-look into socket.io-rate-limiter
-add openid
+- Used `helmet` middleware to enforce secure headers.
+- Enforced HTTPS with minimum TLS 1.2 and HSTS (180 days) to prevent downgrade attacks.
+- Client-side: Added a CSP (Content Security Policy). Inline scripts remain due to dynamic behavior in `chat.js`.
 
-Enable certificate verification for HTTPS. (NEED TO FIX!!!!) Send mail to Jim.
+---
 
-Clean all the code
-add maximum length to all inputs. (client side)
-Sanitize on server side for every request. ==> Should be fine tbh. (limit on input or so idk)
+### Step 8: Rate Limiting (HTTP)
+
+- Added rate limiting to the `/login` & `/register` route (max 10 attempts per 15 minutes) to prevent brute-force attacks & spamming.
+
+---
+
+### Step 9: WSS Support
+
+- Upgraded WebSocket connections to use WSS (WebSocket over TLS).
+
+> **Note:** Same as Step 3
+
+---
+
+### Step 10: Database Migration
+
+- Migrated all stateful data (users, messages, etc.) to the PostgreSQL database.
+
+---
+
+### Step 11: Removed Case-Insensitive Username Matching
+
+- Removed case-insensitive checks to maintain strict username uniqueness (removed for simplicity).
+
+---
+
+### Step 12: Indexing Fixes
+
+- Adjusted frontend logic due to PostgreSQL starting serial IDs at `1`, while arrays in JS are 0-based. Now we look up rooms based on their object id, not simple id array-indexing.
+
+> Note: This code was already incorrect in the skeleton.
+
+```text
+To recreate, have client A open a private channel. Then on client B make another public/private channel. Since the array assumes ids for indexes, it will try to navigate to array[id_new_channel_b] but the size will be smaller as client B does not have access to the private channel of client A. Causing the client to index outside of the array.
+```
+
+---
+
+### Step 13: Regex DoS Protection
+
+- Ensured regex validations aren't potential ReDoS vulnerabilities.
+
+---
+
+### Step 14: End-to-End Encryption (E2EE)
+
+- Implemented E2EE using symmetric keys (one per message).
+- Each client maintains a map of all users' public keys.
+- Upon joining, a user's public key is broadcast to everyone.
+- Clients store all public keys and their own private key.
+  > Note: Key revocation/deletion is not yet implemented.
+
+---
+
+### Step 15: Encrypted Message Retrieval
+
+- When entering a private/direct room, old messages are fetched and decrypted using matching `message_keys`.
+
+> Note: If the user was not part of the channel when the messages were sent, the user can not decrypt the messages.
+
+---
+
+### Step 16: JWT Authentication
+
+- JWTs added to WebSocket handshake for secure identity verification.
+- JWTs include `SameSite` and `HttpOnly` flags and are transmitted over HTTPS.
+- JWTs not used for HTTP routes since none are sensitive, but framework is in place.
+
+> Note: The JWTs are only used during WebSocket handshake. Once they expire (after connection setup), they never have to be refreshed if the user stays logged in.
+
+---
+
+### Step 17: Rate Limiting (WebSocket)
+
+- Applied rate limiting for WebSocket actions (20 actions per 10 seconds per socket).
+
+## 📓 Notes
+
+We generate the RSA key pair upon registration, as otherwise we cannot make multiple accounts from the same terminal. Though this is not optimal, I don't see this being a security threat.
+
+## Threat - Protection strategy summary
 
 Threat | Protection Strategy
 Session Hijacking | HTTPS only, Secure+HttpOnly cookies, short-lived tokens, no localStorage
