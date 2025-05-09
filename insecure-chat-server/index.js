@@ -6,7 +6,6 @@ const port = process.env.PORT || 3000;
 const fs = require("fs");
 const https = require("https");
 const { Pool } = require("pg");
-const sanitizeHtml = require("sanitize-html");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
@@ -159,19 +158,15 @@ app.post("/register", authLimiter, async (req, res) => {
   if (name.length > 100 || password.length > 100) {
     return res.status(400).send("Input too long");
   }
-  // Sanitize input, not really necessary.
-  const cleanName = sanitizeHtml(name);
-  const cleanPwd = sanitizeHtml(password);
-
   // Check if the input contains only alphanumeric characters (and underscores)
-  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
-  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(password);
+  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(name);
   if (!name || !password) {
     return res.status(400).send("Missing credentials");
   }
   if (
-    cleanName !== name ||
-    cleanPwd !== password ||
+    name !== name ||
+    password !== password ||
     !isValidPwd ||
     !isValidUsername
   ) {
@@ -183,13 +178,13 @@ app.post("/register", authLimiter, async (req, res) => {
       SELECT * FROM users WHERE name = $1;
     `;
 
-    const findUserResult = await pool.query(findUserQuery, [cleanName]); // Case sensitive!! Needed as frontend UI uses the name we find.
+    const findUserResult = await pool.query(findUserQuery, [name]); // Case sensitive!! Needed as frontend UI uses the name we find.
 
     if (findUserResult.rows.length > 0) {
       return res.status(400).send("User already exists");
     }
 
-    const hashedPassword = await bcrypt.hash(cleanPwd, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert the new user into the database
     const query = `
@@ -198,7 +193,7 @@ app.post("/register", authLimiter, async (req, res) => {
       RETURNING id;
     `;
 
-    const values = [cleanName, hashedPassword, publicKey];
+    const values = [name, hashedPassword, publicKey];
 
     const result = await pool.query(query, values);
     const user_id = result.rows[0].id;
@@ -235,18 +230,15 @@ app.post("/login", authLimiter, async (req, res) => {
   if (name.length > 100 || password.length > 100) {
     return res.status(400).send("Input too long");
   }
-  // Sanitize input, not really necessary.
-  const cleanName = sanitizeHtml(name);
-  const cleanPwd = sanitizeHtml(password);
   // Check if the input contains only alphanumeric characters (and underscores)
-  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(cleanPwd);
-  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
+  const isValidPwd = /^[a-zA-Z0-9_]+$/.test(password);
+  const isValidUsername = /^[a-zA-Z0-9_]+$/.test(name);
   if (!name || !password) {
     return res.status(400).send("Missing credentials");
   }
   if (
-    cleanName !== name ||
-    cleanPwd !== password ||
+    name !== name ||
+    password !== password ||
     !isValidPwd ||
     !isValidUsername
   ) {
@@ -270,7 +262,7 @@ app.post("/login", authLimiter, async (req, res) => {
     if (!samePwd) {
       return res.status(400).send("Incorrect credentials");
     }
-    const token = jwt.sign({ name: cleanName }, JWT_SECRET, {
+    const token = jwt.sign({ name: name }, JWT_SECRET, {
       expiresIn: JWT_EXPIRY,
     });
     res.json({ token });
