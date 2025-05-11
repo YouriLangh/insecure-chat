@@ -172,21 +172,17 @@ To recreate, have client A open a private channel. Then on client B make another
 
 - Applied rate limiting for WebSocket actions (20 actions per 10 seconds per socket).
 
+---
+
+### Step 18: Prevent embedding in iframe
+
+- Use of `frame-ancestors 'none'` to prevent other apps from embedding our chat-application in iframes which can lead to clickjacking.
+
 ## 📓 Notes
 
 We generate the RSA key pair upon registration, as otherwise we cannot make multiple accounts from the same terminal. Though this is not optimal, I don't see this being a security threat.
 
 I was going to add refreshing of access tokens, but as they're just used to establish a wss, it seems like a bigger vulnerability risk to refresh them every so often than to just send them once.
-
-## Threat - Protection strategy summary
-
-Threat | Protection Strategy
-Session Hijacking | HTTPS only, Secure+HttpOnly cookies, short-lived tokens, no localStorage
-CSRF | Use SameSite cookies or JWT in headers, avoid storing tokens in cookies if possible
-TLS Downgrade | HSTS header, disable HTTP, block old TLS versions
-Session Fixation | Regenerate tokens/sessions on login
-XSS / Code Injection | CSP headers, escape/sanitize input, Helmet
-MITM | HTTPS/WSS, client pinning (optional), no mixed content
 
 ### How does SocketMap work?
 
