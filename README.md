@@ -162,7 +162,6 @@ To recreate, have client A open a private channel. Then on client B make another
 ### Step 16: JWT Authentication
 
 - JWTs added to WebSocket handshake for secure identity verification.
-- JWTs include `SameSite` and `HttpOnly` flags and are transmitted over HTTPS.
 - JWTs not used for HTTP routes since none are sensitive, but framework is in place.
 
 > Note: The JWTs are only used during WebSocket handshake. Once they expire (after connection setup), they never have to be refreshed if the user stays logged in.

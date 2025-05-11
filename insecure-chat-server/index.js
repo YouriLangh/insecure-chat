@@ -14,7 +14,7 @@ const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-const JWT_EXPIRY = process.env.JWT_EXPIRY || "30m";
+const JWT_EXPIRY = process.env.JWT_EXPIRY || "30s";
 
 app.use(express.json());
 app.use(helmet());
