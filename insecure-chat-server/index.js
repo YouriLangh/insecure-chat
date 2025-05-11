@@ -347,7 +347,7 @@ async function removeUserFromRoom(user, room) {
 }
 
 /**
- * Add a message to a room
+ * Add a message to a room (ensure user is part of the room or do not perform the action)
  * - If the room is private or direct, encrypt the message and store it in the database
  * - If the room is public, store the message in the database
  * - Send the message to the room
@@ -357,6 +357,16 @@ async function removeUserFromRoom(user, room) {
  */
 async function addMessageToRoom(roomId, username, msg) {
   const room = await Rooms.getRoom(roomId);
+
+  const members = await Rooms.getRoomMembers(roomId);
+  const isMember = members.some((u) => u.name === username);
+  if (!isMember) {
+    console.warn(
+      `Unauthorized message attempt by ${username} to room ${roomId}`
+    );
+    return;
+  }
+
   msg.time = new Date().getTime();
   let basePayload;
   if (!room) return;
@@ -545,6 +555,13 @@ io.on("connection", (socket) => {
     if (!IOrateLimit(socket)) {
       console.log("Adding too many users to channels!", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
+    }
+    const requestingUser = await Users.getUserByName(username);
+    const room = await Rooms.getRoom(req.channel);
+    const members = await Rooms.getRoomMembers(room.id);
+    const isMember = members.some((m) => m.id === requestingUser.id); // Ensure the user is part of the room to which they want to add another user
+    if (!isMember || room.direct) {
+      return socket.emit("error", "Unauthorized room modification.");
     }
     if (userLoggedIn) {
       const user = await Users.getUserByName(req.user); // The user being added
