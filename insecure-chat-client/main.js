@@ -8,6 +8,8 @@ const { generateKeyPairSync } = require("crypto");
 
 const keysFilePath = path.join(__dirname, "user_keys.json");
 
+// Load the stored keys from the JSON file, this way users can login different times
+// and still have their keys available
 function loadAllStoredKeys() {
   if (!fs.existsSync(keysFilePath)) return {};
   try {
@@ -17,14 +19,13 @@ function loadAllStoredKeys() {
     return {};
   }
 }
-
+// Store the private key of the user in a JSON file
 function storeUserKey(username, privateKey) {
   const allKeys = loadAllStoredKeys();
   allKeys[username] = privateKey;
   fs.writeFileSync(keysFilePath, JSON.stringify(allKeys, null, 2), "utf8");
 }
 
-// New certs const caPath = path.join(__dirname, "certs", "rootCA.pem");
 const caPath = path.join(__dirname, "certs2", "rootCA.pem");
 const ca = fs.readFileSync(caPath);
 
@@ -66,12 +67,9 @@ let userData = {
 // Regex to enforce just characters in a name
 
 ipcMain.on("login", function (event, data) {
-  // From reading documentation, we know that sanitize-html still allows for certain edge cases:
-  // "<>alert('xss')"  Is sanitized to :  &lt;&gt;alert('xss')
-
   // Sanitizing user input on login
   const cleanName = sanitizeHtml(data.name);
-  // Ensure only characters & digits are used in both the password & username
+  // Ensure only characters, underscores & digits are used in both the password & username
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
   const pwd = data.password;
   const cleanPwd = sanitizeHtml(pwd); // sanitize password aswell
@@ -109,8 +107,7 @@ ipcMain.on("login", function (event, data) {
       .then((data) => {
         userData.name = cleanName;
         userData.token = data.token; // Store JWT
-        console.log("data: ", data);
-        const allKeys = loadAllStoredKeys();
+        const allKeys = loadAllStoredKeys(); // Retrieve the RSA keys from the JSON file and store in memory
         const storedKey = allKeys[cleanName];
 
         if (storedKey) {
@@ -134,6 +131,12 @@ ipcMain.on("login", function (event, data) {
   }
 });
 
+/**
+ * This function handles the registration of a new user.
+ * It sanitizes the username and password, checks their validity,
+ * generates a new RSA key pair, and sends a POST request to the server.
+ * If successful, it stores the private key locally.
+ */
 ipcMain.on("register", function (event, data) {
   const cleanName = sanitizeHtml(data.name);
   const isValidUsername = /^[a-zA-Z0-9_]+$/.test(cleanName);
@@ -175,10 +178,8 @@ ipcMain.on("register", function (event, data) {
     })
       .then((res) => {
         if (!res.ok) {
-          return res.text().then((errorMessage) => {
-            throw new Error(
-              errorMessage || `Request failed with status ${res.status}`
-            );
+          return res.text().then((_) => {
+            throw new Error(`Request failed with status ${res.status}`);
           });
         }
         return res.text();

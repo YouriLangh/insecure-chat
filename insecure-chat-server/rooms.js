@@ -104,21 +104,26 @@ module.exports = (pool) => {
       return rooms;
     },
 
+    // Add a member to a room
     addMember: async (roomId, userId) => {
-      const res = await pool.query(
+      await pool.query(
         `INSERT INTO user_rooms (user_id, room_id)
            VALUES ($1, $2)`,
         [userId, roomId]
       );
     },
-
+    // Remove a member from a room
     removeMember: async (roomId, userId) => {
-      const res = await pool.query(
+      await pool.query(
         `DELETE FROM user_rooms WHERE user_id = $1 AND room_id = $2`,
         [userId, roomId]
       );
     },
 
+    /**
+     * Find all the rooms that are forced membership
+     * @returns {Promise<Array>} List of forced membership rooms
+     */
     getForcedRooms: async () => {
       const res = await pool.query(
         "SELECT * FROM rooms WHERE force_membership = true"

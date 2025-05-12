@@ -146,7 +146,7 @@ To recreate, have client A open a private channel. Then on client B make another
 - Implemented E2EE using symmetric keys (one per message).
 - Each client maintains a map of all users' public keys.
 - Upon joining, a user's public key is broadcast to everyone.
-- Clients store all public keys and their own private key.
+- Clients store all public keys and their own private key in-memory.
   > Note: Key revocation/deletion is not yet implemented.
 
 ---
@@ -177,6 +177,13 @@ To recreate, have client A open a private channel. Then on client B make another
 ### Step 18: Prevent embedding in iframe
 
 - Use of `frame-ancestors 'none'` to prevent other apps from embedding our chat-application in iframes which can lead to clickjacking.
+
+---
+
+### Step 19: Ensure users can only perform permitted actions
+
+- Prevent users from sending messages to rooms they are not a part of. Verify that members are part of the room in `addMessageToRoom`
+-
 
 ## 📓 Notes
 
