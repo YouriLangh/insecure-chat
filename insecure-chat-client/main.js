@@ -13,17 +13,26 @@ const keysFilePath = path.join(__dirname, "user_keys.json");
 function loadAllStoredKeys() {
   if (!fs.existsSync(keysFilePath)) return {};
   try {
-    return JSON.parse(fs.readFileSync(keysFilePath, "utf8"));
+    const fileContent = fs.readFileSync(keysFilePath, "utf8").trim();
+    if (!fileContent) return {}; // Avoid parsing empty file
+    return JSON.parse(fileContent);
   } catch (err) {
-    console.error("Failed to read keys file:", err);
+    console.error("Failed to read or parse keys file:", err);
     return {};
   }
 }
+
 // Store the private key of the user in a JSON file
 function storeUserKey(username, privateKey) {
   const allKeys = loadAllStoredKeys();
   allKeys[username] = privateKey;
-  fs.writeFileSync(keysFilePath, JSON.stringify(allKeys, null, 2), "utf8");
+
+  try {
+    const jsonContent = JSON.stringify(allKeys, null, 2);
+    fs.writeFileSync(keysFilePath, jsonContent, "utf8");
+  } catch (err) {
+    console.error("Failed to write keys file:", err);
+  }
 }
 
 const caPath = path.join(__dirname, "certs2", "rootCA.pem");

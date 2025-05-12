@@ -359,7 +359,7 @@ async function addMessageToRoom(roomId, username, msg) {
   const room = await Rooms.getRoom(roomId);
 
   const members = await Rooms.getRoomMembers(roomId);
-  const isMember = members.some((u) => u.name === username);
+  const isMember = members.some((u) => u === username);
   if (!isMember) {
     console.warn(
       `Unauthorized message attempt by ${username} to room ${roomId}`
@@ -556,10 +556,9 @@ io.on("connection", (socket) => {
       console.log("Adding too many users to channels!", socket.user.name);
       return socket.emit("rate_error", "Rate limit exceeded");
     }
-    const requestingUser = await Users.getUserByName(username);
     const room = await Rooms.getRoom(req.channel);
     const members = await Rooms.getRoomMembers(room.id);
-    const isMember = members.some((m) => m.id === requestingUser.id); // Ensure the user is part of the room to which they want to add another user
+    const isMember = members.some((m) => m === username); // Ensure the user is part of the room to which they want to add another user
     if (!isMember || room.direct) {
       return socket.emit("error", "Unauthorized room modification.");
     }
